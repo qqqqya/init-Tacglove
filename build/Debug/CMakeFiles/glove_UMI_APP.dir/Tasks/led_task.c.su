@@ -1,0 +1,6 @@
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:37:29:led_task_show_state	24	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:63:29:led_task_run_self_test	24	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:116:29:led_task_blink_system_blue	16	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:142:13:led_task_show_fault	8	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:153:6:led_task_start_collection	16	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:186:6:led_task_entry	24	static

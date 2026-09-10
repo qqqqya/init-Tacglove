@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "stlinkgdbtarget",
+            "request": "launch",
+            "name": "STM32 Debug (Debug ELF)",
+            "origin": "snippet",
+            "cwd": "${workspaceFolder}",
+            "deviceName": "STM32G474RET6",
+            "deviceCore": "Cortex-M4",
+            "preBuild": "",
+            "preLaunchTask": "Build Debug",
+            "runEntry": "main",
+            "imagesAndSymbols": [
+                {
+                    "imageFileName": "${workspaceFolder}/build/Debug/glove_UMI_APP.elf",
+                    "symbolFileName": "${workspaceFolder}/build/Debug/glove_UMI_APP.elf"
+                }
+            ]
+        }
+    ]
+}
