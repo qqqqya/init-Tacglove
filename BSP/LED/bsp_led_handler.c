@@ -94,13 +94,14 @@ led_handler_status_t bsp_led_handler_set(bsp_led_id_t led,
     }
 
     const led_driver_status_t driver_status =
-        bsp_led_driver_set_pixel(s_led_to_pixel[led], color);
+        bsp_led_driver_set_pixel(s_led_to_pixel[led], color);//亮度如何设置
     return driver_status;
     // return led_handler_convert_driver_status(driver_status);
 }
 
 led_handler_status_t bsp_led_handler_set_all_cameras(bsp_led_color_t color)
 {
+    // 设置所有相机指示灯--五个指示灯 为指定颜色
     for (bsp_led_id_t led = BSP_LED_CAMERA_1;
          led <= BSP_LED_CAMERA_5;
          led = (bsp_led_id_t)((uint32_t)led + 1U))

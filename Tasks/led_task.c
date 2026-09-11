@@ -76,7 +76,7 @@ static led_handler_status_t led_task_run_self_test(void)
     for (uint8_t blink = 0U; blink < SELF_TEST_BLINK_COUNT; ++blink)
     {
         led_handler_status_t status =
-            led_task_show_state(COLOR_GREEN, COLOR_OFF);
+            led_task_show_state(COLOR_GREEN, COLOR_OFF);//这个green不对 亮度在哪里调？？--好像里面也包含 但是时序好像确实不对
         if (HANDLER_OK != status)
         {
             return status;
@@ -185,7 +185,7 @@ static void led_task_request_action(uint32_t action)
         return;
     }
 
-    taskENTER_CRITICAL();
+    taskENTER_CRITICAL();// 确保原子性  进入临界区
     s_pending_actions |= action;
     taskEXIT_CRITICAL();
 }
@@ -233,13 +233,13 @@ void led_task_entry(void *argument)
         led_task_show_fault();
     }
 
-    led_status = led_task_run_self_test();
+    led_status = led_task_run_self_test();//上电自检LED 五个绿灯闪烁三次
     if (HANDLER_OK != led_status)
     {
         led_task_show_fault();
     }
 
-    led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
+    led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);//自检之后常亮绿色
     if (HANDLER_OK != led_status)
     {
         led_task_show_fault();
