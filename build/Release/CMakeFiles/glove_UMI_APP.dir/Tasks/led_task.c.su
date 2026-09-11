@@ -1,4 +1,9 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:37:29:led_task_show_state	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:142:13:led_task_show_fault	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:153:6:led_task_start_collection	32	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:186:6:led_task_entry	40	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:47:29:led_task_show_state	16	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:196:13:led_task_show_fault	8	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:181:13:led_task_request_action	8	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:147:29:led_task_show_gesture_feedback	32	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:129:29:led_task_beep	16	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:207:6:led_task_on_short_press	0	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:212:6:led_task_on_long_press	0	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:217:6:led_task_on_double_click	0	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/led_task.c:222:6:led_task_entry	48	static

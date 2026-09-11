@@ -7,7 +7,7 @@
 				{
 					"directoryIndex" : 1,
 					"id" : "stm32cubemx::@768a070a0fe75716b479",
-					"jsonFile" : "target-stm32cubemx-Release-45be8e0e9547a8791607.json",
+					"jsonFile" : "target-stm32cubemx-Debug-45be8e0e9547a8791607.json",
 					"name" : "stm32cubemx",
 					"projectIndex" : 0
 				}
@@ -20,7 +20,7 @@
 					[
 						1
 					],
-					"jsonFile" : "directory-.-Release-f040eec181a89de70dbe.json",
+					"jsonFile" : "directory-.-Debug-f040eec181a89de70dbe.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "3.22"
@@ -38,7 +38,7 @@
 						0
 					],
 					"build" : "cmake/stm32cubemx",
-					"jsonFile" : "directory-cmake.stm32cubemx-Release-720efe0a241989607e76.json",
+					"jsonFile" : "directory-cmake.stm32cubemx-Debug-720efe0a241989607e76.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "3.22"
@@ -52,7 +52,7 @@
 					]
 				}
 			],
-			"name" : "Release",
+			"name" : "Debug",
 			"projects" : 
 			[
 				{
@@ -78,14 +78,14 @@
 				{
 					"directoryIndex" : 1,
 					"id" : "STM32_Drivers::@768a070a0fe75716b479",
-					"jsonFile" : "target-STM32_Drivers-Release-497f56a2a35d47c5d96b.json",
+					"jsonFile" : "target-STM32_Drivers-Debug-7bc5c4ad142d974076f9.json",
 					"name" : "STM32_Drivers",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "glove_UMI_APP::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-glove_UMI_APP-Release-1e466fa696a0d4338cba.json",
+					"jsonFile" : "target-glove_UMI_APP-Debug-808109c80e80cb8164e3.json",
 					"name" : "glove_UMI_APP",
 					"projectIndex" : 0
 				}
@@ -95,7 +95,7 @@
 	"kind" : "codemodel",
 	"paths" : 
 	{
-		"build" : "D:/InternWork/Code/Test_mygit/Tacapp_init/build/Release",
+		"build" : "D:/InternWork/Code/Test_mygit/Tacapp_init/build/Debug",
 		"source" : "D:/InternWork/Code/Test_mygit/Tacapp_init"
 	},
 	"version" : 

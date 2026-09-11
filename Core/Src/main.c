@@ -18,7 +18,6 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
-#include "bsp_beep_driver.h"
 #include "dma.h"
 #include "rtc.h"
 #include "usart.h"
@@ -29,7 +28,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "task_manager.h"
-#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -95,12 +93,12 @@ int main(void)
   MX_GPIO_Init();
   MX_DMA_Init();
   MX_USART2_UART_Init();
-  MX_RTC_Init();  //
+  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
-  bsp_beep_driver_init();
-  bsp_beep_driver_set(true);
-  HAL_Delay(1000);
-  bsp_beep_driver_set(false);
+  // bsp_beep_driver_init();
+  // bsp_beep_driver_set(true);
+  // HAL_Delay(1000);
+  // bsp_beep_driver_set(false); 
 
   if (TASK_OK != task_manager_init())
   {
@@ -144,8 +142,7 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE
-                              |RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;

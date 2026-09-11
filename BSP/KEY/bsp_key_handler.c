@@ -1,6 +1,6 @@
 /**
  * @file bsp_key_handler.c
- * @brief PA11 低电平有效数据采集按键的板级实现。
+ * @brief PA11低电平有效数据采集按键状态机实现。
  */
 #include "bsp_key_handler.h"
 
@@ -9,27 +9,213 @@
 
 #include "main.h"
 
-#define KEY_DEBOUNCE_TIME_MS 20U
+#define KEY_DEBOUNCE_TIME_MS     20U
+#define KEY_LONG_PRESS_TIME_MS   400U
+#define KEY_DOUBLE_CLICK_TIME_MS 350U
 
-/** @brief 标记按键 Handler 是否已经完成初始化。 */
+typedef struct
+{
+    key_state_t state;
+    key_event_t event;
+    uint32_t state_start_tick;
+    uint32_t press_start_tick;
+    uint32_t secondary_start_tick;
+    bool secondary_timing;
+    bool has_triggered;
+} key_control_t;
+
 static bool s_key_initialized;
-static bool s_last_raw_pressed;
-static bool s_press_reported;
-static uint32_t s_last_change_tick;
+static key_control_t s_key;
+
+/**
+ * @brief 读取PA11按键是否处于低电平按下状态。
+ * @return true表示按下，false表示松开。
+ */
+static bool key_read_level(void)
+{
+    return GPIO_PIN_RESET ==
+           HAL_GPIO_ReadPin(key_cap_GPIO_Port, key_cap_Pin);
+}
+
+/**
+ * @brief 判断从指定时刻起是否已经达到目标时间。
+ * @param current_tick 当前HAL Tick，单位ms。
+ * @param start_tick 开始HAL Tick，单位ms。
+ * @param duration_ms 目标时长，单位ms。
+ * @return true表示已到期，false表示尚未到期。
+ */
+static bool key_time_reached(uint32_t current_tick,
+                             uint32_t start_tick,
+                             uint32_t duration_ms)
+{
+    return duration_ms <= (current_tick - start_tick);
+}
 
 key_handler_status_t bsp_key_handler_init(void)
 {
-    s_last_raw_pressed = (GPIO_PIN_RESET ==
-                          HAL_GPIO_ReadPin(key_cap_GPIO_Port, key_cap_Pin));
-    s_press_reported = s_last_raw_pressed;
-    s_last_change_tick = HAL_GetTick();
-    s_key_initialized = true;
+    /** @brief 初始化按键状态机
+    状态空闲
+    事件无
+    定时器0
+    */
+    s_key.state = KEY_STATE_IDLE;
+    s_key.event = KEY_EVENT_NONE;
+    s_key.state_start_tick = 0U;
+    s_key.press_start_tick = 0U;       //按键按下开始时间
+    s_key.secondary_start_tick = 0U;   //双击或松开消抖开始时间
+    s_key.secondary_timing = false;    //是否正在进行辅助计时
+    s_key.has_triggered = false;       //是否触发事件
+    s_key_initialized = true;          //是否初始化
     return KEY_HANDLER_OK;
 }
 
-key_handler_status_t bsp_key_handler_is_pressed(bool *pressed)
+key_handler_status_t bsp_key_handler_process(void)
 {
-    if (NULL == pressed)
+    if (!s_key_initialized)
+    {
+        return KEY_HANDLER_ERROR_RESOURCE;
+    }
+
+    const bool is_pressed = key_read_level();//读取按键状态
+    const uint32_t current_tick = HAL_GetTick();
+
+    switch (s_key.state)
+    {
+        case KEY_STATE_IDLE:
+            s_key.has_triggered = false;
+            s_key.secondary_timing = false;
+            if (is_pressed)
+            {
+                s_key.state = KEY_STATE_DEBOUNCE_PRESS;
+                s_key.state_start_tick = current_tick;
+            }
+            break;
+
+        case KEY_STATE_DEBOUNCE_PRESS:
+            if (!is_pressed)
+            {
+                s_key.state = KEY_STATE_IDLE;
+            }
+            else if (key_time_reached(current_tick,
+                                      s_key.state_start_tick,
+                                      KEY_DEBOUNCE_TIME_MS))
+            {
+                s_key.state = KEY_STATE_HOLD;
+                s_key.press_start_tick = current_tick;
+
+                /* 此时只确认按下；单击必须等松开及双击窗口结束后才能确定。 */
+            }
+            break;
+
+        case KEY_STATE_HOLD:
+            if (is_pressed)
+            {
+                if (key_time_reached(current_tick,
+                                     s_key.press_start_tick,
+                                     KEY_LONG_PRESS_TIME_MS) &&
+                    !s_key.has_triggered)
+                {
+                    /* 持续按下达到门限后立即上报一次长按事件。 */
+                    s_key.event = KEY_EVENT_LONG_PRESS;
+                    s_key.has_triggered = true;
+                }
+            }
+            else
+            {
+                s_key.state = KEY_STATE_DEBOUNCE_RELEASE;
+                s_key.state_start_tick = current_tick;
+            }
+            break;
+
+        case KEY_STATE_DEBOUNCE_RELEASE:
+            if (is_pressed)
+            {
+                s_key.state = KEY_STATE_HOLD;
+            }
+            else if (key_time_reached(current_tick,
+                                      s_key.state_start_tick,
+                                      KEY_DEBOUNCE_TIME_MS))
+            {
+                if (s_key.has_triggered)
+                {
+                    s_key.state = KEY_STATE_IDLE;
+                }
+                else
+                {
+                    /* 第一次短按结束，进入双击判定窗口。 */
+                    s_key.state = KEY_STATE_WAIT_DOUBLE;
+                    s_key.state_start_tick = current_tick;
+                    s_key.secondary_timing = false;
+                }
+            }
+            break;
+
+        case KEY_STATE_WAIT_DOUBLE: //等待双击 判断单击or双击
+            if (is_pressed)
+            {
+                if (!s_key.secondary_timing)
+                {
+                    s_key.secondary_timing = true;
+                    s_key.secondary_start_tick = current_tick;
+                }
+                else if (key_time_reached(current_tick,
+                                          s_key.secondary_start_tick,
+                                          KEY_DEBOUNCE_TIME_MS) &&
+                         !s_key.has_triggered)
+                {
+                    /* 第二次按下消抖成功，双击成立。 */
+                    s_key.event = KEY_EVENT_DOUBLE_CLICK;
+                    s_key.has_triggered = true;
+                    s_key.state = KEY_STATE_DOUBLE_DONE;
+                    s_key.secondary_timing = false;
+                }
+            }
+            else
+            {
+                s_key.secondary_timing = false;
+                if (key_time_reached(current_tick,
+                                     s_key.state_start_tick,
+                                     KEY_DOUBLE_CLICK_TIME_MS) &&
+                    !s_key.has_triggered)
+                {
+                    /* 双击窗口超时且没有第二次按下，单击成立。 */
+                    s_key.event = KEY_EVENT_SHORT_PRESS;
+                    s_key.state = KEY_STATE_IDLE;
+                }
+            }
+            break;
+
+        case KEY_STATE_DOUBLE_DONE:
+            if (is_pressed)
+            {
+                s_key.secondary_timing = false;
+            }
+            else if (!s_key.secondary_timing)
+            {
+                s_key.secondary_timing = true;
+                s_key.secondary_start_tick = current_tick;
+            }
+            else if (key_time_reached(current_tick,
+                                      s_key.secondary_start_tick,
+                                      KEY_DEBOUNCE_TIME_MS))//按键松开去抖时间20ms
+            {
+                s_key.state = KEY_STATE_IDLE;
+                s_key.secondary_timing = false;
+            }
+            break;
+
+        default:
+            s_key.state = KEY_STATE_IDLE;
+            s_key.secondary_timing = false;
+            break;
+    }
+
+    return KEY_HANDLER_OK;
+}
+
+key_handler_status_t bsp_key_handler_get_event(key_event_t *event)
+{
+    if (NULL == event)
     {
         return KEY_HANDLER_ERROR_PARAMETER;
     }
@@ -39,36 +225,17 @@ key_handler_status_t bsp_key_handler_is_pressed(bool *pressed)
         return KEY_HANDLER_ERROR_RESOURCE;
     }
 
-    *pressed = false;
+    *event = s_key.event;   //获取按键事件 in struct key_handler_t
+    return KEY_HANDLER_OK;
+}
 
-    const bool raw_pressed = (GPIO_PIN_RESET ==
-                              HAL_GPIO_ReadPin(key_cap_GPIO_Port, key_cap_Pin));
-    const uint32_t current_tick = HAL_GetTick();
-
-    if (raw_pressed != s_last_raw_pressed)
+key_handler_status_t bsp_key_handler_clear_event(void)
+{
+    if (!s_key_initialized)
     {
-        s_last_raw_pressed = raw_pressed;
-        s_last_change_tick = current_tick;
-        return KEY_HANDLER_OK;
+        return KEY_HANDLER_ERROR_RESOURCE;
     }
 
-    if ((current_tick - s_last_change_tick) < KEY_DEBOUNCE_TIME_MS)
-    {
-        return KEY_HANDLER_OK;
-    }
-
-    if (raw_pressed)
-    {
-        if (!s_press_reported)
-        {
-            s_press_reported = true;
-            *pressed = true;
-        }
-    }
-    else
-    {
-        s_press_reported = false;
-    }
-
+    s_key.event = KEY_EVENT_NONE;
     return KEY_HANDLER_OK;
 }

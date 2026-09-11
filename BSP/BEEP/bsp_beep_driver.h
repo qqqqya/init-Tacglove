@@ -3,7 +3,7 @@
  * @brief 五指数采板有源蜂鸣器 GPIO 驱动接口。
  * @details
  * 本模块直接封装 PB9 及低电平有效的硬件特性，不创建 Handler 层，
- * 也不包含鸣叫时长、节奏或 FreeRTOS 延时。
+ * 鸣叫时长由LED任务控制，Driver中不包含任务延时。
  */
 #ifndef BSP_BEEP_DRIVER_H
 #define BSP_BEEP_DRIVER_H

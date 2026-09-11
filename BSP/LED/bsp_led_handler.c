@@ -17,7 +17,7 @@ static const uint8_t s_led_to_pixel[BSP_LED_ID_COUNT] = {
     [BSP_LED_CAMERA_5] = 1U,
     [BSP_LED_SYSTEM] = 0U,
 };
-
+#if 0
 /**
  * @brief 将 LED Driver 层状态转换为 LED Handler 层状态。
  * @param driver_status LED Driver 层返回的状态。
@@ -66,18 +66,23 @@ static led_handler_status_t led_handler_convert_driver_status(
 
     return handler_status;
 }
+#endif
+
+
 
 led_handler_status_t bsp_led_handler_init(void)
 {
     led_driver_status_t driver_status = bsp_led_driver_init();
     if (LED_OK != driver_status)
     {
-        return led_handler_convert_driver_status(driver_status);
+        // return led_handler_convert_driver_status(driver_status);
+        return driver_status;
     }
 
     bsp_led_driver_clear();
     driver_status = bsp_led_driver_commit();
-    return led_handler_convert_driver_status(driver_status);
+    return driver_status;
+    // return led_handler_convert_driver_status(driver_status);
 }
 
 led_handler_status_t bsp_led_handler_set(bsp_led_id_t led,
@@ -90,7 +95,8 @@ led_handler_status_t bsp_led_handler_set(bsp_led_id_t led,
 
     const led_driver_status_t driver_status =
         bsp_led_driver_set_pixel(s_led_to_pixel[led], color);
-    return led_handler_convert_driver_status(driver_status);
+    return driver_status;
+    // return led_handler_convert_driver_status(driver_status);
 }
 
 led_handler_status_t bsp_led_handler_set_all_cameras(bsp_led_color_t color)
@@ -111,12 +117,15 @@ led_handler_status_t bsp_led_handler_set_all_cameras(bsp_led_color_t color)
 }
 
 void bsp_led_handler_clear(void)
-{
+{//清空六颗业务逻辑灯的软件缓存。
+// @note 本函数不发送数据，需随后调用 bsp_led_handler_commit()。
     bsp_led_driver_clear();
 }
 
 led_handler_status_t bsp_led_handler_commit(void)
 {
     const led_driver_status_t driver_status = bsp_led_driver_commit();
-    return led_handler_convert_driver_status(driver_status);
+
+    return driver_status;
+    // return led_handler_convert_driver_status(driver_status);
 }

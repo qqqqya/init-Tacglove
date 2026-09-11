@@ -6,7 +6,7 @@
 #define KEY_TASK_H
 
 /**
- * @brief 扫描PA11按键，确认有效按下后直接执行系统指示动作。
+ * @brief 每1 ms推进PA11按键状态机，并直接调用对应LED任务动作接口。
  * @param argument FreeRTOS预留任务参数，当前固定传入NULL。
  */
 void key_task_entry(void *argument);

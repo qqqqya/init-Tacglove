@@ -1,6 +1,6 @@
 /**
  * @file led_task.c
- * @brief LED上电自检及按键蓝灯、蜂鸣器反馈任务。
+ * @brief LED上电自检、采集状态和按键识别反馈任务。
  */
 #include "led_task.h"
 
@@ -13,19 +13,29 @@
 #include "bsp_beep_driver.h"
 #include "bsp_led_handler.h"
 
-#define SELF_TEST_BLINK_COUNT    3U     // 自检闪烁次数
-#define SELF_TEST_HALF_PERIOD_MS 250U   // 自检闪烁周期的一半时间
-#define RGB_TEST_HOLD_MS         400U   // RGB测试保持时间
-#define RGB_TEST_OFF_HOLD_MS     200U   // RGB测试关闭保持时间
-#define SYSTEM_BLINK_COUNT       3U     // 系统状态灯闪烁次数
-#define SYSTEM_HALF_PERIOD_MS    250U   // 系统状态灯闪烁周期的一半时间
-#define BEEP_TIME_MS             120U   // 蜂鸣器反馈时间
-#define LED_BRIGHTNESS           20U    // LED亮度值
+#define SELF_TEST_BLINK_COUNT      3U
+#define SELF_TEST_HALF_PERIOD_MS   250U
+#define PREPARE_BLINK_COUNT        3U
+#define PREPARE_HALF_PERIOD_MS     250U
+#define SHORT_BEEP_TIME_MS         120U
+#define LONG_BEEP_TIME_MS          600U
+#define DOUBLE_BEEP_TIME_MS        100U
+#define DOUBLE_BEEP_INTERVAL_MS    100U
+#define LONG_FEEDBACK_TIME_MS      600U
+#define DOUBLE_FEEDBACK_TIME_MS    100U
+#define LED_TASK_PERIOD_MS         1U
+#define LED_BRIGHTNESS             1U
+
+#define LED_ACTION_SHORT_PRESS  (1UL << 0U)
+#define LED_ACTION_LONG_PRESS   (1UL << 1U)
+#define LED_ACTION_DOUBLE_CLICK (1UL << 2U)
 
 static const bsp_led_color_t COLOR_OFF = {0U, 0U, 0U};
 static const bsp_led_color_t COLOR_RED = {LED_BRIGHTNESS, 0U, 0U};
 static const bsp_led_color_t COLOR_GREEN = {0U, LED_BRIGHTNESS, 0U};
 static const bsp_led_color_t COLOR_BLUE = {0U, 0U, LED_BRIGHTNESS};
+
+static volatile uint32_t s_pending_actions;
 static volatile bool s_led_ready;
 
 /**
@@ -57,41 +67,16 @@ static led_handler_status_t led_task_show_state(
 }
 
 /**
- * @brief 执行六灯RGB检查及五颗相机灯绿色闪烁自检。
+ * @brief 执行LED2~LED6绿色闪烁的上电自检灯效。
  * @return LED Handler层状态。
+ * @note LED7在整个上电自检过程中保持熄灭。
  */
 static led_handler_status_t led_task_run_self_test(void)
 {
-    const bsp_led_color_t rgb_colors[] = {
-        {LED_BRIGHTNESS, 0U, 0U},
-        {0U, LED_BRIGHTNESS, 0U},
-        {0U, 0U, LED_BRIGHTNESS},
-    };
-
-    for (uint8_t color = 0U;
-         color < (uint8_t)(sizeof(rgb_colors) / sizeof(rgb_colors[0]));
-         ++color)
-    {
-        const led_handler_status_t status =
-            led_task_show_state(rgb_colors[color], rgb_colors[color]);
-        if (HANDLER_OK != status)
-        {
-            return status;
-        }
-        vTaskDelay(pdMS_TO_TICKS(RGB_TEST_HOLD_MS));
-    }
-
-    led_handler_status_t status =
-        led_task_show_state(COLOR_OFF, COLOR_OFF);
-    if (HANDLER_OK != status)
-    {
-        return status;
-    }
-    vTaskDelay(pdMS_TO_TICKS(RGB_TEST_OFF_HOLD_MS));
-
     for (uint8_t blink = 0U; blink < SELF_TEST_BLINK_COUNT; ++blink)
     {
-        status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
+        led_handler_status_t status =
+            led_task_show_state(COLOR_GREEN, COLOR_OFF);
         if (HANDLER_OK != status)
         {
             return status;
@@ -110,12 +95,12 @@ static led_handler_status_t led_task_run_self_test(void)
 }
 
 /**
- * @brief 让LED7蓝色闪烁，LED2~LED6保持绿色。
+ * @brief 让LED7蓝色闪烁表示进入数据采集准备状态。
  * @return LED Handler层状态。
  */
-static led_handler_status_t led_task_blink_system_blue(void)
+static led_handler_status_t led_task_run_prepare(void)
 {
-    for (uint8_t blink = 0U; blink < SYSTEM_BLINK_COUNT; ++blink)
+    for (uint8_t blink = 0U; blink < PREPARE_BLINK_COUNT; ++blink)
     {
         led_handler_status_t status =
             led_task_show_state(COLOR_GREEN, COLOR_BLUE);
@@ -123,21 +108,90 @@ static led_handler_status_t led_task_blink_system_blue(void)
         {
             return status;
         }
-        vTaskDelay(pdMS_TO_TICKS(SYSTEM_HALF_PERIOD_MS));
+        vTaskDelay(pdMS_TO_TICKS(PREPARE_HALF_PERIOD_MS));
 
         status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
         if (HANDLER_OK != status)
         {
             return status;
         }
-        vTaskDelay(pdMS_TO_TICKS(SYSTEM_HALF_PERIOD_MS));
+        vTaskDelay(pdMS_TO_TICKS(PREPARE_HALF_PERIOD_MS));
     }
 
     return HANDLER_OK;
 }
 
 /**
- * @brief 显示红色故障状态并停止当前任务的正常流程。
+ * @brief 阻塞LED任务完成一次蜂鸣，按键任务仍可继续扫描。
+ * @param duration_ms 蜂鸣持续时间，单位ms，必须大于0。
+ * @return 蜂鸣器Driver层状态。
+ */
+static beep_driver_status_t led_task_beep(uint32_t duration_ms)
+{
+    beep_driver_status_t status = bsp_beep_driver_set(true);
+    if (BEEP_DRIVER_OK != status)
+    {
+        return status;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
+    return bsp_beep_driver_set(false);
+}
+
+/**
+ * @brief 临时反转LED7，用于观察长按或双击是否被正确识别。
+ * @param collecting true表示当前处于采集中状态。
+ * @param hold_ms 反转状态保持时间，单位ms。
+ * @return LED Handler层状态。
+ */
+static led_handler_status_t led_task_show_gesture_feedback(
+    bool collecting,
+    uint32_t hold_ms)
+{
+    const bsp_led_color_t feedback_color = collecting ? COLOR_OFF : COLOR_BLUE;
+    led_handler_status_t status =
+        led_task_show_state(COLOR_GREEN, feedback_color);
+    if (HANDLER_OK != status)
+    {
+        return status;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(hold_ms));
+    return led_task_show_state(COLOR_GREEN,
+                               collecting ? COLOR_BLUE : COLOR_OFF);
+}
+
+/**
+ * @brief 原子取出并清空当前待处理的按键动作位。
+ * @return 待处理动作位掩码。
+ */
+static uint32_t led_task_take_pending_actions(void)
+{
+    taskENTER_CRITICAL();
+    const uint32_t actions = s_pending_actions;
+    s_pending_actions = 0U;
+    taskEXIT_CRITICAL();
+    return actions;
+}
+
+/**
+ * @brief 原子记录一个由按键任务直接提交的LED动作。
+ * @param action LED_ACTION_xxx动作位。
+ */
+static void led_task_request_action(uint32_t action)
+{
+    if (!s_led_ready)
+    {
+        return;
+    }
+
+    taskENTER_CRITICAL();
+    s_pending_actions |= action;
+    taskEXIT_CRITICAL();
+}
+
+/**
+ * @brief 显示六灯红色常亮故障状态并停止正常流程。
  */
 static void led_task_show_fault(void)
 {
@@ -150,37 +204,19 @@ static void led_task_show_fault(void)
     }
 }
 
-void led_task_start_collection(void)
+void led_task_on_short_press(void)
 {
-    if (!s_led_ready)
-    {
-        return;
-    }
+    led_task_request_action(LED_ACTION_SHORT_PRESS);
+}
 
-    led_handler_status_t led_status = led_task_blink_system_blue();//
-    if (HANDLER_OK != led_status)
-    {
-        led_task_show_fault();
-    }
+void led_task_on_long_press(void)
+{
+    led_task_request_action(LED_ACTION_LONG_PRESS);
+}
 
-    beep_driver_status_t beep_status = bsp_beep_driver_set(true);
-    if (BEEP_DRIVER_OK != beep_status)
-    {
-        led_task_show_fault();
-    }
-    vTaskDelay(pdMS_TO_TICKS(BEEP_TIME_MS));
-
-    beep_status = bsp_beep_driver_set(false);
-    if (BEEP_DRIVER_OK != beep_status)
-    {
-        led_task_show_fault();
-    }
-
-    led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
-    if (HANDLER_OK != led_status)
-    {
-        led_task_show_fault();
-    }
+void led_task_on_double_click(void)
+{
+    led_task_request_action(LED_ACTION_DOUBLE_CLICK);
 }
 
 void led_task_entry(void *argument)
@@ -203,16 +239,98 @@ void led_task_entry(void *argument)
         led_task_show_fault();
     }
 
-    led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);//
+    led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
     if (HANDLER_OK != led_status)
     {
         led_task_show_fault();
     }
 
+    bool collecting = false;
     s_led_ready = true;
 
     for (;;)
     {
-        vTaskSuspend(NULL);
+        const uint32_t actions = led_task_take_pending_actions();
+
+        if (0U != (actions & LED_ACTION_SHORT_PRESS))
+        {
+            if (!collecting)
+            {
+                led_status = led_task_run_prepare();
+                if (HANDLER_OK != led_status)
+                {
+                    led_task_show_fault();
+                }
+
+                beep_status = led_task_beep(SHORT_BEEP_TIME_MS);
+                if (BEEP_DRIVER_OK != beep_status)
+                {
+                    led_task_show_fault();
+                }
+
+                led_status = led_task_show_state(COLOR_GREEN, COLOR_BLUE);
+                collecting = true;
+            }
+            else
+            {
+                beep_status = led_task_beep(SHORT_BEEP_TIME_MS);
+                if (BEEP_DRIVER_OK != beep_status)
+                {
+                    led_task_show_fault();
+                }
+
+                led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
+                collecting = false;
+            }
+
+            if (HANDLER_OK != led_status)
+            {
+                led_task_show_fault();
+            }
+        }
+
+        if (0U != (actions & LED_ACTION_LONG_PRESS))
+        {
+            led_status = led_task_show_gesture_feedback(
+                collecting,
+                LONG_FEEDBACK_TIME_MS);
+            if (HANDLER_OK != led_status)
+            {
+                led_task_show_fault();
+            }
+
+            beep_status = led_task_beep(LONG_BEEP_TIME_MS);
+            if (BEEP_DRIVER_OK != beep_status)
+            {
+                led_task_show_fault();
+            }
+        }
+
+        if (0U != (actions & LED_ACTION_DOUBLE_CLICK))
+        {
+            for (uint8_t count = 0U; count < 2U; ++count)
+            {
+                led_status = led_task_show_gesture_feedback(
+                    collecting,
+                    DOUBLE_FEEDBACK_TIME_MS);
+                if (HANDLER_OK != led_status)
+                {
+                    led_task_show_fault();
+                }
+
+                beep_status = led_task_beep(DOUBLE_BEEP_TIME_MS);
+                if (BEEP_DRIVER_OK != beep_status)
+                {
+                    led_task_show_fault();
+                }
+
+                if (0U == count)
+                {
+                    vTaskDelay(pdMS_TO_TICKS(DOUBLE_BEEP_INTERVAL_MS));
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(LED_TASK_PERIOD_MS));
     }
 }
