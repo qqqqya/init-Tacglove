@@ -2,7 +2,7 @@
  * @file bsp_led_driver.h
  * @brief SK6805 灯链底层驱动接口。
  * @details
- * 本层只负责六颗物理灯珠的软件帧缓存、GRB 编码和 PB0 单总线发送，
+ * 本层只负责六颗物理灯珠的软件帧缓存、GRB 编码和 TIM3_CH3 PWM DMA 发送，
  * 不包含相机编号、采集状态等业务含义，也不依赖 FreeRTOS。
  */
 #ifndef BSP_LED_DRIVER_H
@@ -40,10 +40,10 @@ typedef enum
 
 /**
  * @brief 初始化 SK6805 底层驱动和软件帧缓存。
- * @details 启用 Cortex-M4 DWT 周期计数器、计算当前主频对应的协议周期数，
- *          将 PB0 拉低并清空六颗灯的缓存；本函数不会发送灯珠数据。
+ * @details 检查 TIM3_CH3 PWM DMA 资源，将比较值置零并清空六颗灯的缓存；
+ *          本函数不会发送灯珠数据。
  * @retval LED_OK 初始化成功。
- * @retval LED_ERRORRESOURCE 系统主频无效或 DWT 周期计数器不可用。
+ * @retval LED_ERRORRESOURCE TIM3_CH3 配置或 DMA 资源不可用。
  */
 led_driver_status_t bsp_led_driver_init(void);
 
@@ -66,11 +66,14 @@ void bsp_led_driver_clear(void);
 
 /**
  * @brief 将完整的六像素缓存提交到 SK6805 灯链并触发锁存。
- * @details 按 G-R-B、最高位优先发送 144 bit；发送数据期间短暂关闭中断，
- *          完成后恢复原中断状态，并保持 PB0 低电平至少 300 us。
+ * @details 按 G-R-B、最高位优先发送 144 bit；TIM3 产生 1.2 us 码元，
+ *          DMA 逐码元更新高电平宽度，数据前后均保持低电平 300 us。
  * @retval LED_OK 一帧数据发送并锁存完成。
- * @retval LED_ERRORRESOURCE 尚未成功初始化 Driver。
- * @warning 修改系统主频、编译器或优化等级后，必须重新用逻辑分析仪校准波形。
+ * @retval LED_ERRORTIMEOUT DMA 未在规定时间内完成传输。
+ * @retval LED_ERRORRESOURCE Driver 未初始化、中断已关闭或 TIM/DMA 无法启动。
+ * @retval LED_ERRORISR 在中断上下文中调用。
+ * @retval LED_ERROR TIM 或 DMA 传输失败。
+ * @warning 修改 TIM3 时钟、PSC、ARR 或 CCR 编码值后，必须用逻辑分析仪重新测量波形。
  */
 led_driver_status_t bsp_led_driver_commit(void);
 

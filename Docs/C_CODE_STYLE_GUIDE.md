@@ -176,7 +176,7 @@ static void led_task_entry(void *argument)
 
 普通业务函数不使用函数级 `optimize("O2")`。SK6805提交函数不添加函数级优化属性。
 
-当前STM32G474的SK6805位时序使用DWT周期计数器，并根据 `SystemCoreClock` 换算目标周期数。修改编译器、优化等级、主频、GPIO访问方式或时序常量后，仍必须用逻辑分析仪重新测量0.3 us/0.9 us脉宽。若以后切换到TIM+DMA/SPI编码方案，也必须同步更新本规范和验证记录。
+当前STM32G474的SK6805位时序使用TIM3_CH3 PWM + DMA：TIM3在170 MHz时采用 `PSC=0`、`ARR=203`，DMA逐码元更新CCR3，其中逻辑0和1的比较值分别为51和153。编译优化等级不会改变定时器输出时序；修改TIM3时钟、PSC、ARR、CCR编码值或GPIO电气配置后，必须用逻辑分析仪重新测量0.3 us/0.9 us脉宽及不小于300 us的复位低电平。
 
 ## 9. 注释和格式
 

@@ -83,19 +83,19 @@
 			{
 				"command" : 0,
 				"file" : 0,
-				"line" : 79,
+				"line" : 80,
 				"parent" : 0
 			},
 			{
 				"command" : 1,
 				"file" : 0,
-				"line" : 81,
+				"line" : 82,
 				"parent" : 0
 			},
 			{
 				"command" : 2,
 				"file" : 0,
-				"line" : 80,
+				"line" : 81,
 				"parent" : 0
 			}
 		]
@@ -118,15 +118,11 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : " -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -O0 -g3 -std=gnu11"
+					"fragment" : " -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard  -Wall -fdata-sections -ffunction-sections -fstack-usage -Os -g0 -std=gnu11"
 				}
 			],
 			"defines" : 
 			[
-				{
-					"backtrace" : 2,
-					"define" : "DEBUG"
-				},
 				{
 					"backtrace" : 2,
 					"define" : "STM32G474xx"

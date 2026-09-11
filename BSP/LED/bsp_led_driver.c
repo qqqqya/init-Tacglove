@@ -1,28 +1,42 @@
 /**
  * @file bsp_led_driver.c
- * @brief STM32G474 通过 PB0 向六颗 SK6805 发送单总线数据。
+ * @brief STM32G474 通过 TIM3_CH3 PWM 和 DMA 向六颗 SK6805 发送数据。
  * @details
  * 每颗灯接收 24 bit，顺序为 G7..G0、R7..R0、B7..B0。
- * 位宽等待使用 DWT->CYCCNT，以 SystemCoreClock 计算目标周期数，不使用
- * 函数级 optimize 属性。逻辑分析仪实测波形始终是最终校准依据。
+ * TIM3 固定码元周期，DMA 逐码元更新 CCR3 产生不同的高电平宽度，
+ * 使传输时序不再依赖 CPU 主频和编译优化等级。
  */
 #include "bsp_led_driver.h"
 
 #include <stdbool.h>
 
-#include "main.h"
+#include "tim.h"
 
-/** @brief 逻辑 0 的目标高电平时间，单位 ns。 */
-#define SK6805_T0H_NS   300UL
+/** @brief 每颗 SK6805 的数据字节数，固定为 G、R、B 三字节。 */
+#define SK6805_BYTES_PER_PIXEL 3U
 
-/** @brief 逻辑 1 的目标高电平时间，单位 ns。 */
-#define SK6805_T1H_NS   900UL
+/** @brief 一个字节内的数据位数。 */
+#define SK6805_BITS_PER_BYTE 8U
 
-/** @brief 单个码元的目标总周期，单位 ns。 */
-#define SK6805_BIT_NS  1200UL
+/** @brief 六颗灯一帧的数据码元数。 */
+#define SK6805_DATA_SLOT_COUNT \
+    (BSP_LED_PIXEL_COUNT * SK6805_BYTES_PER_PIXEL * SK6805_BITS_PER_BYTE)
 
-/** @brief 一帧结束后的目标复位低电平时间，单位 us。 */
-#define SK6805_RESET_US 300UL
+/** @brief 1.2 us 码元周期中，逻辑 0 的 300 ns 高电平计数值。 */
+#define SK6805_PWM_ZERO_TICKS 51U
+
+/** @brief 1.2 us 码元周期中，逻辑 1 的 900 ns 高电平计数值。 */
+#define SK6805_PWM_ONE_TICKS 153U
+
+/** @brief 256 个零占空比周期为 DMA 预装留出裕量，确保复位低电平不小于 300 us。 */
+#define SK6805_RESET_SLOT_COUNT 256U
+
+/** @brief DMA 帧包含前置复位、像素数据和后置复位。 */
+#define SK6805_DMA_SLOT_COUNT \
+    ((2U * SK6805_RESET_SLOT_COUNT) + SK6805_DATA_SLOT_COUNT)
+
+/** @brief PWM DMA 传输完成等待超时，单位 ms。 */
+#define SK6805_TRANSFER_TIMEOUT_MS 5U
 
 /**
  * @brief 六颗灯的软件发送缓存。
@@ -30,99 +44,83 @@
  */
 static uint8_t s_pixels[BSP_LED_PIXEL_COUNT][3];
 
-static uint32_t s_t0h_cycles;   /**< 逻辑 0 高电平对应的 CPU 周期数。 */
-static uint32_t s_t1h_cycles;   /**< 逻辑 1 高电平对应的 CPU 周期数。 */
-static uint32_t s_bit_cycles;   /**< 单个码元对应的 CPU 周期数。 */
-static uint32_t s_reset_cycles; /**< 帧锁存低电平对应的 CPU 周期数。 */
-static bool s_led_initialized;  /**< Driver 是否已经成功初始化。 */
+/** @brief TIM3_CH3 的 DMA 比较值帧缓存。 */
+static uint32_t s_pwm_dma_buffer[SK6805_DMA_SLOT_COUNT];
+
+static volatile bool s_transfer_complete; /**< DMA 一帧传输完成标志。 */
+static volatile bool s_transfer_error;    /**< DMA 或 TIM 发生错误的标志。 */
+static bool s_led_initialized;            /**< Driver 是否已经成功初始化。 */
 
 /**
- * @brief 将纳秒时间向上换算为当前主频的 CPU 周期数。
- * @param nanoseconds 目标时间，单位 ns。
- * @return 不小于目标时间的 CPU 周期数。
+ * @brief 将一个字节按最高位优先编码为八个 PWM 比较值。
+ * @param value 待编码的字节。
+ * @param slot_index DMA 缓存写入位置，调用后向后移动八个码元。
  */
-static uint32_t sk6805_ns_to_cycles(uint32_t nanoseconds)
+static void sk6805_encode_byte(uint8_t value, uint16_t *slot_index)
 {
-    return (uint32_t)((((uint64_t)SystemCoreClock * nanoseconds) +
-                       999999999ULL) /
-                      1000000000ULL);
-}
-
-/**
- * @brief 将微秒时间向上换算为当前主频的 CPU 周期数。
- * @param microseconds 目标时间，单位 us。
- * @return 不小于目标时间的 CPU 周期数。
- */
-static uint32_t sk6805_us_to_cycles(uint32_t microseconds)
-{
-    return (uint32_t)((((uint64_t)SystemCoreClock * microseconds) +
-                       999999ULL) /
-                      1000000ULL);
-}
-
-/**
- * @brief 从指定起始计数开始等待给定数量的 CPU 周期。
- * @param start DWT 周期计数器的起始值。
- * @param cycles 至少需要经过的 CPU 周期数。
- */
-static inline void sk6805_wait_cycles(uint32_t start, uint32_t cycles)
-{
-    while ((uint32_t)(DWT->CYCCNT - start) < cycles)
+    for (uint8_t bit = 0U; bit < SK6805_BITS_PER_BYTE; ++bit)
     {
-        __NOP();
-    }
-}
-
-/**
- * @brief 发送一个 SK6805 数据位。
- * @param one true 发送逻辑 1，false 发送逻辑 0。
- * @warning 仅允许在已经关闭抢占中断的完整帧发送区间内调用。
- */
-static inline void sk6805_write_bit(bool one)
-{
-    rgb_ctrl_GPIO_Port->BSRR = rgb_ctrl_Pin;
-    const uint32_t high_start = DWT->CYCCNT;
-
-    sk6805_wait_cycles(high_start, one ? s_t1h_cycles : s_t0h_cycles);
-    rgb_ctrl_GPIO_Port->BSRR = (uint32_t)rgb_ctrl_Pin << 16U;
-    sk6805_wait_cycles(high_start, s_bit_cycles);
-}
-
-/**
- * @brief 按最高位优先顺序发送一个字节。
- * @param value 要发送的 8 bit 数据。
- */
-static void sk6805_write_byte(uint8_t value)
-{
-    for (uint8_t bit = 0U; bit < 8U; ++bit)
-    {
-        sk6805_write_bit((value & 0x80U) != 0U);
+        s_pwm_dma_buffer[*slot_index] =
+            (0U != (value & 0x80U)) ? SK6805_PWM_ONE_TICKS
+                                    : SK6805_PWM_ZERO_TICKS;
+        ++(*slot_index);
         value <<= 1U;
     }
 }
 
+/**
+ * @brief 根据当前六颗灯的 GRB 缓存构建完整 PWM DMA 帧。
+ * @details 数据前后均保留 300 us 零占空比时间，用于帧边界复位和锁存。
+ */
+static void sk6805_build_dma_frame(void)
+{
+    for (uint16_t slot = 0U; slot < SK6805_DMA_SLOT_COUNT; ++slot)
+    {
+        s_pwm_dma_buffer[slot] = 0U;
+    }
+
+    uint16_t slot_index = SK6805_RESET_SLOT_COUNT;
+    for (uint8_t pixel = 0U; pixel < BSP_LED_PIXEL_COUNT; ++pixel)
+    {
+        sk6805_encode_byte(s_pixels[pixel][0], &slot_index);
+        sk6805_encode_byte(s_pixels[pixel][1], &slot_index);
+        sk6805_encode_byte(s_pixels[pixel][2], &slot_index);
+    }
+}
+
+/**
+ * @brief 将 TIM3_CH3 恢复为停止且低电平的安全状态。
+ * @return HAL 停止 PWM DMA 的结果。
+ */
+static HAL_StatusTypeDef sk6805_stop_transfer(void)
+{
+    const HAL_StatusTypeDef status =
+        HAL_TIM_PWM_Stop_DMA(&htim3, TIM_CHANNEL_3);
+
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0U);
+    __HAL_TIM_SET_COUNTER(&htim3, 0U);
+    htim3.Instance->EGR = TIM_EGR_UG;
+    __HAL_TIM_CLEAR_FLAG(&htim3, TIM_FLAG_UPDATE | TIM_FLAG_CC3);
+    return status;
+}
+
 led_driver_status_t bsp_led_driver_init(void)
 {
-    if (0U == SystemCoreClock)
+    if ((TIM3 != htim3.Instance) ||
+        (0U != htim3.Init.Prescaler) ||
+        (203U != htim3.Init.Period) ||
+        (NULL == htim3.hdma[TIM_DMA_ID_CC3]))
     {
         return LED_ERRORRESOURCE;
     }
 
-    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
-    DWT->CYCCNT = 0U;
-    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
-    if (0U == (DWT->CTRL & DWT_CTRL_CYCCNTENA_Msk))
-    {
-        return LED_ERRORRESOURCE;
-    }
-
-    s_t0h_cycles = sk6805_ns_to_cycles(SK6805_T0H_NS);
-    s_t1h_cycles = sk6805_ns_to_cycles(SK6805_T1H_NS);
-    s_bit_cycles = sk6805_ns_to_cycles(SK6805_BIT_NS);
-    s_reset_cycles = sk6805_us_to_cycles(SK6805_RESET_US);
-
-    HAL_GPIO_WritePin(rgb_ctrl_GPIO_Port, rgb_ctrl_Pin, GPIO_PIN_RESET);
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0U);
+    __HAL_TIM_SET_COUNTER(&htim3, 0U);
+    htim3.Instance->EGR = TIM_EGR_UG;
+    __HAL_TIM_CLEAR_FLAG(&htim3, TIM_FLAG_UPDATE | TIM_FLAG_CC3);
     bsp_led_driver_clear();
+    s_transfer_complete = false;
+    s_transfer_error = false;
     s_led_initialized = true;
     return LED_OK;
 }
@@ -159,25 +157,76 @@ led_driver_status_t bsp_led_driver_commit(void)
         return LED_ERRORRESOURCE;
     }
 
-    /*
-     * 保存调用前的中断状态。六颗灯共 144 bit，短暂关中断可避免 FreeRTOS
-     * tick 或其他 ISR 拉长数据脉冲；一帧数据发完后立即恢复原中断状态。
-     */
-    const uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-
-    for (uint8_t pixel = 0U; pixel < BSP_LED_PIXEL_COUNT; ++pixel)
+    if (0U != __get_IPSR())
     {
-        sk6805_write_byte(s_pixels[pixel][0]);
-        sk6805_write_byte(s_pixels[pixel][1]);
-        sk6805_write_byte(s_pixels[pixel][2]);
+        return LED_ERRORISR;
     }
 
-    rgb_ctrl_GPIO_Port->BSRR = (uint32_t)rgb_ctrl_Pin << 16U;
-    __set_PRIMASK(primask);
+    if (0U != __get_PRIMASK())
+    {
+        return LED_ERRORRESOURCE;
+    }
 
-    /* 复位阶段只要求保持低电平，中断造成的额外延长不会破坏锁存。 */
-    const uint32_t reset_start = DWT->CYCCNT;
-    sk6805_wait_cycles(reset_start, s_reset_cycles);
+    sk6805_build_dma_frame();
+    s_transfer_complete = false;
+    s_transfer_error = false;
+
+    __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, 0U);
+    __HAL_TIM_SET_COUNTER(&htim3, 0U);
+    htim3.Instance->EGR = TIM_EGR_UG;
+    __HAL_TIM_CLEAR_FLAG(&htim3, TIM_FLAG_UPDATE | TIM_FLAG_CC3);
+
+    const HAL_StatusTypeDef start_status =
+        HAL_TIM_PWM_Start_DMA(&htim3,
+                              TIM_CHANNEL_3,
+                              s_pwm_dma_buffer,
+                              SK6805_DMA_SLOT_COUNT);
+    if (HAL_OK != start_status)
+    {
+        (void)sk6805_stop_transfer();
+        return LED_ERRORRESOURCE;
+    }
+
+    const uint32_t start_tick = HAL_GetTick();
+    while ((!s_transfer_complete) && (!s_transfer_error))
+    {
+        if (SK6805_TRANSFER_TIMEOUT_MS <= (HAL_GetTick() - start_tick))
+        {
+            (void)sk6805_stop_transfer();
+            return LED_ERRORTIMEOUT;
+        }
+    }
+
+    const HAL_StatusTypeDef stop_status = sk6805_stop_transfer();
+    if (s_transfer_error || (HAL_OK != stop_status))
+    {
+        return LED_ERROR;
+    }
+
     return LED_OK;
+}
+
+/**
+ * @brief TIM PWM DMA 一帧传输完成回调。
+ * @param htim 触发回调的 TIM Handle。
+ */
+void HAL_TIM_PWM_PulseFinishedCallback(TIM_HandleTypeDef *htim)
+{
+    if ((TIM3 == htim->Instance) &&
+        (HAL_TIM_ACTIVE_CHANNEL_3 == htim->Channel))
+    {
+        s_transfer_complete = true;
+    }
+}
+
+/**
+ * @brief TIM DMA 传输错误回调。
+ * @param htim 发生错误的 TIM Handle。
+ */
+void HAL_TIM_ErrorCallback(TIM_HandleTypeDef *htim)
+{
+    if (TIM3 == htim->Instance)
+    {
+        s_transfer_error = true;
+    }
 }

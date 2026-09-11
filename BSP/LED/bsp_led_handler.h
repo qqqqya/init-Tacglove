@@ -44,7 +44,7 @@ typedef enum
 /**
  * @brief 初始化 LED Driver，并向灯链提交一帧全灭数据。
  * @retval HANDLER_OK 初始化及首帧提交成功。
- * @retval HANDLER_ERRORRESOURCE 系统主频、DWT 或底层资源不可用。
+ * @retval HANDLER_ERRORRESOURCE TIM3_CH3 PWM DMA 或底层资源不可用。
  * @retval HANDLER_ERROR 其他底层错误。
  */
 led_handler_status_t bsp_led_handler_init(void);
