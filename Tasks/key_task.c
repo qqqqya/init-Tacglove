@@ -11,6 +11,7 @@
 
 #include "bsp_key_handler.h"
 #include "led_task.h"
+#include "micro_ros_task.h"
 
 #define KEY_TASK_PERIOD_MS 1U
 
@@ -60,6 +61,9 @@ void key_task_entry(void *argument)
 
         if (KEY_EVENT_NONE != event)
         {
+            /* Agent断线或Queue满时只丢弃ROS上报，本地灯和蜂鸣器动作不受影响。 */
+            (void)micro_ros_task_enqueue_key_event((uint8_t)event);
+
             status = bsp_key_handler_clear_event();
             if (KEY_HANDLER_OK != status)
             {

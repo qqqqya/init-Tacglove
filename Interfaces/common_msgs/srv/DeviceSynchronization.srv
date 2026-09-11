@@ -1,0 +1,4 @@
+bool sync_request
+---
+std_msgs/Header header
+bool sync_state

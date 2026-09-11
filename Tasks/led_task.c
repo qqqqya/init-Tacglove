@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 #include "FreeRTOS.h"
+#include "queue.h"
 #include "task.h"
 
 #include "bsp_beep_driver.h"
@@ -23,6 +24,7 @@
 #define DOUBLE_BEEP_INTERVAL_MS    100U
 #define LONG_FEEDBACK_TIME_MS      600U
 #define DOUBLE_FEEDBACK_TIME_MS    100U
+#define REMOTE_BLINK_HALF_PERIOD_MS 250U
 #define LED_TASK_PERIOD_MS         1U
 #define LED_BRIGHTNESS             1U
 
@@ -35,8 +37,118 @@ static const bsp_led_color_t COLOR_RED = {LED_BRIGHTNESS, 0U, 0U};
 static const bsp_led_color_t COLOR_GREEN = {0U, LED_BRIGHTNESS, 0U};
 static const bsp_led_color_t COLOR_BLUE = {0U, 0U, LED_BRIGHTNESS};
 
+typedef struct
+{
+    bool enabled;
+    uint8_t led_mode[LED_TASK_LED_COUNT];
+} led_task_cmd_t;
+
 static volatile uint32_t s_pending_actions;
 static volatile bool s_led_ready;
+static volatile uint8_t s_system_state = LED_TASK_SYSTEM_SELF_TEST;
+static QueueHandle_t s_led_cmd_queue;
+
+/**
+ * @brief 将ROS灯效模式转换为当前闪烁相位对应的颜色。
+ * @param mode LED_TASK_MODE_xxx模式。
+ * @param blink_on true表示闪烁灯当前处于亮相位。
+ * @param[out] color 非空颜色输出指针。
+ * @retval TASK_OK 转换成功。
+ * @retval TASK_ERROR_PARAMETER mode非法或color为空。
+ */
+static task_status_t led_task_mode_to_color(uint8_t mode,
+                                            bool blink_on,
+                                            bsp_led_color_t *color)
+{
+    if (NULL == color)
+    {
+        return TASK_ERROR_PARAMETER;
+    }
+
+    switch (mode)
+    {
+        case LED_TASK_MODE_OFF:
+            *color = COLOR_OFF;
+            break;
+
+        case LED_TASK_MODE_GREEN_SOLID:
+            *color = COLOR_GREEN;
+            break;
+
+        case LED_TASK_MODE_GREEN_BLINK:
+            *color = blink_on ? COLOR_GREEN : COLOR_OFF;
+            break;
+
+        case LED_TASK_MODE_RED_SOLID:
+            *color = COLOR_RED;
+            break;
+
+        case LED_TASK_MODE_BLUE_BLINK:
+            *color = blink_on ? COLOR_BLUE : COLOR_OFF;
+            break;
+
+        case LED_TASK_MODE_BLUE_SOLID:
+            *color = COLOR_BLUE;
+            break;
+
+        default:
+            return TASK_ERROR_PARAMETER;
+    }
+
+    return TASK_OK;
+}
+
+/**
+ * @brief 判断远程cmd中是否至少包含一个闪烁模式。
+ * @param cmd 非空远程cmd指针。
+ * @return true表示需要周期切换闪烁相位。
+ */
+static bool led_task_cmd_has_blink(const led_task_cmd_t *cmd)
+{
+    for (uint8_t index = 0U; index < LED_TASK_LED_COUNT; ++index)
+    {
+        if ((LED_TASK_MODE_GREEN_BLINK == cmd->led_mode[index]) ||
+            (LED_TASK_MODE_BLUE_BLINK == cmd->led_mode[index]))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * @brief 显示远程cmd在指定闪烁相位下的完整六灯状态。
+ * @param cmd 非空远程cmd指针。
+ * @param blink_on true表示闪烁灯当前处于亮相位。
+ * @return LED Handler层状态。
+ */
+static led_handler_status_t led_task_show_remote_cmd(
+    const led_task_cmd_t *cmd,
+    bool blink_on)
+{
+    bsp_led_handler_clear();
+
+    for (uint8_t index = 0U; index < LED_TASK_LED_COUNT; ++index)
+    {
+        bsp_led_color_t color = COLOR_OFF;
+        const task_status_t convert_status = led_task_mode_to_color(
+            cmd->led_mode[index], blink_on, &color);
+        if (TASK_OK != convert_status)
+        {
+            return HANDLER_ERRORPARAMETER;
+        }
+
+        const led_handler_status_t status = bsp_led_handler_set(
+            (bsp_led_id_t)index, color);
+        if (HANDLER_OK != status)
+        {
+            return status;
+        }
+    }
+
+    return bsp_led_handler_commit();
+}
 
 /**
  * @brief 同时设置五颗相机灯和LED7系统状态灯。
@@ -195,6 +307,7 @@ static void led_task_request_action(uint32_t action)
  */
 static void led_task_show_fault(void)
 {
+    s_system_state = LED_TASK_SYSTEM_ERROR;
     (void)bsp_beep_driver_set(false);
     (void)led_task_show_state(COLOR_RED, COLOR_RED);
 
@@ -202,6 +315,75 @@ static void led_task_show_fault(void)
     {
         vTaskDelay(pdMS_TO_TICKS(1000U));
     }
+}
+
+task_status_t led_task_resources_init(void)
+{
+    if (NULL != s_led_cmd_queue)
+    {
+        return TASK_OK;
+    }
+
+    s_led_cmd_queue = xQueueCreate(1U, sizeof(led_task_cmd_t));
+    if (NULL == s_led_cmd_queue)
+    {
+        return TASK_ERROR_NO_MEMORY;
+    }
+
+    return TASK_OK;
+}
+
+task_status_t led_task_submit_cmd(
+    const uint8_t led_mode[LED_TASK_LED_COUNT])
+{
+    if (NULL == led_mode)
+    {
+        return TASK_ERROR_PARAMETER;
+    }
+
+    if (NULL == s_led_cmd_queue)
+    {
+        return TASK_ERROR_RESOURCE;
+    }
+
+    led_task_cmd_t cmd = {.enabled = true};
+    for (uint8_t index = 0U; index < LED_TASK_LED_COUNT; ++index)
+    {
+        if (LED_TASK_MODE_BLUE_SOLID < led_mode[index])
+        {
+            return TASK_ERROR_PARAMETER;
+        }
+
+        cmd.led_mode[index] = led_mode[index];
+    }
+
+    if (pdPASS != xQueueOverwrite(s_led_cmd_queue, &cmd))
+    {
+        return TASK_ERROR;
+    }
+
+    return TASK_OK;
+}
+
+task_status_t led_task_release_remote_control(void)
+{
+    if (NULL == s_led_cmd_queue)
+    {
+        return TASK_ERROR_RESOURCE;
+    }
+
+    const led_task_cmd_t cmd = {.enabled = false};
+    if (pdPASS != xQueueOverwrite(s_led_cmd_queue, &cmd))
+    {
+        return TASK_ERROR;
+    }
+
+    return TASK_OK;
+}
+
+uint8_t led_task_get_system_state(void)
+{
+    return s_system_state;
 }
 
 void led_task_on_short_press(void)
@@ -221,6 +403,8 @@ void led_task_on_double_click(void)
 
 void led_task_entry(void *argument)
 {
+    s_system_state = LED_TASK_SYSTEM_SELF_TEST;
+
     led_handler_status_t led_status = bsp_led_handler_init();
     if (HANDLER_OK != led_status)
     {
@@ -246,20 +430,58 @@ void led_task_entry(void *argument)
     }
 
     bool collecting = false;
+    bool remote_active = false;
+    bool remote_blink_on = true;
+    led_task_cmd_t remote_cmd = {0};
+    TickType_t next_remote_blink = xTaskGetTickCount();
+
+    s_system_state = LED_TASK_SYSTEM_IDLE;
     s_led_ready = true;
 
     for (;;)
     {
+        led_task_cmd_t received_cmd = {0};
+        if (pdPASS == xQueueReceive(s_led_cmd_queue, &received_cmd, 0U))
+        {
+            remote_active = received_cmd.enabled;
+            if (remote_active)
+            {
+                remote_cmd = received_cmd;
+                remote_blink_on = true;
+                next_remote_blink = xTaskGetTickCount() +
+                                    pdMS_TO_TICKS(
+                                        REMOTE_BLINK_HALF_PERIOD_MS);
+                led_status = led_task_show_remote_cmd(&remote_cmd,
+                                                      remote_blink_on);
+            }
+            else
+            {
+                led_status = led_task_show_state(
+                    COLOR_GREEN,
+                    collecting ? COLOR_BLUE : COLOR_OFF);
+            }
+
+            if (HANDLER_OK != led_status)
+            {
+                led_task_show_fault();
+            }
+        }
+
         const uint32_t actions = led_task_take_pending_actions();
 
         if (0U != (actions & LED_ACTION_SHORT_PRESS))
         {
             if (!collecting)
             {
-                led_status = led_task_run_prepare();
-                if (HANDLER_OK != led_status)
+                s_system_state = LED_TASK_SYSTEM_PREPARING;
+
+                if (!remote_active)
                 {
-                    led_task_show_fault();
+                    led_status = led_task_run_prepare();
+                    if (HANDLER_OK != led_status)
+                    {
+                        led_task_show_fault();
+                    }
                 }
 
                 beep_status = led_task_beep(SHORT_BEEP_TIME_MS);
@@ -268,8 +490,13 @@ void led_task_entry(void *argument)
                     led_task_show_fault();
                 }
 
-                led_status = led_task_show_state(COLOR_GREEN, COLOR_BLUE);
+                if (!remote_active)
+                {
+                    led_status = led_task_show_state(COLOR_GREEN,
+                                                     COLOR_BLUE);
+                }
                 collecting = true;
+                s_system_state = LED_TASK_SYSTEM_COLLECTING;
             }
             else
             {
@@ -279,11 +506,15 @@ void led_task_entry(void *argument)
                     led_task_show_fault();
                 }
 
-                led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
+                if (!remote_active)
+                {
+                    led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
+                }
                 collecting = false;
+                s_system_state = LED_TASK_SYSTEM_IDLE;
             }
 
-            if (HANDLER_OK != led_status)
+            if ((!remote_active) && (HANDLER_OK != led_status))
             {
                 led_task_show_fault();
             }
@@ -291,12 +522,15 @@ void led_task_entry(void *argument)
 
         if (0U != (actions & LED_ACTION_LONG_PRESS))
         {
-            led_status = led_task_show_gesture_feedback(
-                collecting,
-                LONG_FEEDBACK_TIME_MS);
-            if (HANDLER_OK != led_status)
+            if (!remote_active)
             {
-                led_task_show_fault();
+                led_status = led_task_show_gesture_feedback(
+                    collecting,
+                    LONG_FEEDBACK_TIME_MS);
+                if (HANDLER_OK != led_status)
+                {
+                    led_task_show_fault();
+                }
             }
 
             beep_status = led_task_beep(LONG_BEEP_TIME_MS);
@@ -310,12 +544,15 @@ void led_task_entry(void *argument)
         {
             for (uint8_t count = 0U; count < 2U; ++count)
             {
-                led_status = led_task_show_gesture_feedback(
-                    collecting,
-                    DOUBLE_FEEDBACK_TIME_MS);
-                if (HANDLER_OK != led_status)
+                if (!remote_active)
                 {
-                    led_task_show_fault();
+                    led_status = led_task_show_gesture_feedback(
+                        collecting,
+                        DOUBLE_FEEDBACK_TIME_MS);
+                    if (HANDLER_OK != led_status)
+                    {
+                        led_task_show_fault();
+                    }
                 }
 
                 beep_status = led_task_beep(DOUBLE_BEEP_TIME_MS);
@@ -328,6 +565,23 @@ void led_task_entry(void *argument)
                 {
                     vTaskDelay(pdMS_TO_TICKS(DOUBLE_BEEP_INTERVAL_MS));
                 }
+            }
+        }
+
+        const TickType_t current_tick = xTaskGetTickCount();
+        if (remote_active &&
+            led_task_cmd_has_blink(&remote_cmd) &&
+            ((int32_t)(current_tick - next_remote_blink) >= 0))
+        {
+            remote_blink_on = !remote_blink_on;
+            next_remote_blink = current_tick +
+                                pdMS_TO_TICKS(
+                                    REMOTE_BLINK_HALF_PERIOD_MS);
+            led_status = led_task_show_remote_cmd(&remote_cmd,
+                                                  remote_blink_on);
+            if (HANDLER_OK != led_status)
+            {
+                led_task_show_fault();
             }
         }
 

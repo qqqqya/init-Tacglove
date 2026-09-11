@@ -50,7 +50,14 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     BSP/BEEP/bsp_beep_driver.c
     Tasks/led_task.c
     Tasks/key_task.c
+    Tasks/micro_ros_task.c
     Tasks/task_manager.c
+
+    Middleware/Micro-ROS/extra_sources/custom_memory_manager.c
+    Middleware/Micro-ROS/extra_sources/microros_allocators.c
+    Middleware/Micro-ROS/extra_sources/microros_time.c
+    Middleware/Micro-ROS/extra_sources/microros_transports/dma_transport.c
+    Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c
 
     Middleware/FreeRTOS/croutine.c
     Middleware/FreeRTOS/event_groups.c
@@ -73,6 +80,9 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     Middleware/FreeRTOS
     Middleware/FreeRTOS/include
     Middleware/FreeRTOS/portable/GCC/ARM_CM4F
+    Middleware/Micro-ROS/include
+    Middleware/Micro-ROS/extra_sources
+    Middleware/Micro-ROS/extra_sources/microros_transports
 )
 
 # Add project symbols (macros)
@@ -86,6 +96,7 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 # Add linked libraries
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
+    ${CMAKE_CURRENT_SOURCE_DIR}/Middleware/Micro-ROS/libmicroros.a
 
     # Add user defined libraries
 )

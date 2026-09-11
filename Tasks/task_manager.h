@@ -5,17 +5,13 @@
 #ifndef TASK_MANAGER_H
 #define TASK_MANAGER_H
 
-/** @brief 任务创建返回状态。 */
-typedef enum
-{
-    TASK_OK = 0,           /**< 两个任务均创建成功。 */
-    TASK_ERROR_NO_MEMORY   /**< FreeRTOS无法分配任务控制块或任务栈。 */
-} task_status_t;
+#include "task_status.h"
 
 /**
- * @brief 直接创建LED任务和按键任务。
- * @retval TASK_OK 两个任务均创建成功。
+ * @brief 初始化任务间资源并创建LED、按键和micro-ROS任务。
+ * @retval TASK_OK 资源初始化和三个任务创建成功。
  * @retval TASK_ERROR_NO_MEMORY 任一任务创建失败。
+ * @retval TASK_ERROR_RESOURCE 任一任务间资源初始化失败。
  */
 task_status_t task_manager_init(void);
 
