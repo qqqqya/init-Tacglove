@@ -79,6 +79,7 @@ led_handler_status_t bsp_led_handler_init(void)
         return driver_status;
     }
 
+    //发一个全灭指令
     bsp_led_driver_clear();
     driver_status = bsp_led_driver_commit();
     return driver_status;

@@ -18,20 +18,20 @@
 /** @brief 一个字节内的数据位数。 */
 #define SK6805_BITS_PER_BYTE 8U
 
-/** @brief 六颗灯一帧的数据码元数。 */
+/** @brief 六颗灯一帧的数据码元数。--bit数 6*3*8 */
 #define SK6805_DATA_SLOT_COUNT \
     (BSP_LED_PIXEL_COUNT * SK6805_BYTES_PER_PIXEL * SK6805_BITS_PER_BYTE)
 
 /** @brief 1.2 us 码元周期中，逻辑 0 的 300 ns 高电平计数值。 */
-#define SK6805_PWM_ZERO_TICKS 51U
+#define SK6805_PWM_ZERO_TICKS 51U     //170M 时钟下对应时钟周期为5.88 ns   51 个时钟周期为 300 ns
 
 /** @brief 1.2 us 码元周期中，逻辑 1 的 900 ns 高电平计数值。 */
 #define SK6805_PWM_ONE_TICKS 153U
 
 /** @brief 256 个零占空比周期为 DMA 预装留出裕量，确保复位低电平不小于 300 us。 */
-#define SK6805_RESET_SLOT_COUNT 256U
+#define SK6805_RESET_SLOT_COUNT 256U    //有些版本300us  有些版本80us--------256*1.2us
 
-/** @brief DMA 帧包含前置复位、像素数据和后置复位。 */
+/** @brief DMA 帧包含前置复位、像素数据和后置复位。--656个时钟周期 */
 #define SK6805_DMA_SLOT_COUNT \
     ((2U * SK6805_RESET_SLOT_COUNT) + SK6805_DATA_SLOT_COUNT)
 
@@ -52,7 +52,7 @@ static volatile bool s_transfer_error;    /**< DMA 或 TIM 发生错误的标志
 static bool s_led_initialized;            /**< Driver 是否已经成功初始化。 */
 
 /**
- * @brief 将一个字节按最高位优先编码为八个 PWM 比较值。
+ * @brief 将一个字节按最高位优先编码为八个 PWM 比较值。设置的是s_pwm_dma_buffer中的数据
  * @param value 待编码的字节。
  * @param slot_index DMA 缓存写入位置，调用后向后移动八个码元。
  */
@@ -61,8 +61,8 @@ static void sk6805_encode_byte(uint8_t value, uint16_t *slot_index)
     for (uint8_t bit = 0U; bit < SK6805_BITS_PER_BYTE; ++bit)
     {
         s_pwm_dma_buffer[*slot_index] =
-            (0U != (value & 0x80U)) ? SK6805_PWM_ONE_TICKS
-                                    : SK6805_PWM_ZERO_TICKS;
+            (0U != (value & 0x80U)) ? SK6805_PWM_ONE_TICKS      //bit=1？ 高电平900ns 153个时钟周期
+                                    : SK6805_PWM_ZERO_TICKS;    //bit=0？ 低电平300ns 51个时钟周期
         ++(*slot_index);
         value <<= 1U;
     }
@@ -74,15 +74,17 @@ static void sk6805_encode_byte(uint8_t value, uint16_t *slot_index)
  */
 static void sk6805_build_dma_frame(void)
 {
+    //清空DMA缓存
     for (uint16_t slot = 0U; slot < SK6805_DMA_SLOT_COUNT; ++slot)
     {
         s_pwm_dma_buffer[slot] = 0U;
     }
 
+
     uint16_t slot_index = SK6805_RESET_SLOT_COUNT;
     for (uint8_t pixel = 0U; pixel < BSP_LED_PIXEL_COUNT; ++pixel)
     {
-        sk6805_encode_byte(s_pixels[pixel][0], &slot_index);
+        sk6805_encode_byte(s_pixels[pixel][0], &slot_index);//设置G通道比较值 8位
         sk6805_encode_byte(s_pixels[pixel][1], &slot_index);
         sk6805_encode_byte(s_pixels[pixel][2], &slot_index);
     }
@@ -143,15 +145,15 @@ led_driver_status_t bsp_led_driver_set_pixel(uint8_t pixel_index,
 void bsp_led_driver_clear(void)
 {
     for (uint8_t pixel = 0U; pixel < BSP_LED_PIXEL_COUNT; ++pixel)
-    {
+    {//将所有灯  所有像素的GRB值设置为0 清除所有像素信息
         s_pixels[pixel][0] = 0U;
         s_pixels[pixel][1] = 0U;
         s_pixels[pixel][2] = 0U;
     }
 }
 
-led_driver_status_t bsp_led_driver_commit(void)
-{
+led_driver_status_t bsp_led_driver_commit(void){
+    //将完整的六像素缓存提交到 SK6805 灯链并触发锁存。
     if (!s_led_initialized)
     {
         return LED_ERRORRESOURCE;
@@ -176,6 +178,7 @@ led_driver_status_t bsp_led_driver_commit(void)
     htim3.Instance->EGR = TIM_EGR_UG;
     __HAL_TIM_CLEAR_FLAG(&htim3, TIM_FLAG_UPDATE | TIM_FLAG_CC3);
 
+    //根据build_dma_frame()设置的s_pwm_dma_buffer数据，启动PWM DMA传输
     const HAL_StatusTypeDef start_status =
         HAL_TIM_PWM_Start_DMA(&htim3,
                               TIM_CHANNEL_3,
@@ -187,6 +190,7 @@ led_driver_status_t bsp_led_driver_commit(void)
         return LED_ERRORRESOURCE;
     }
 
+    //等待传输完成或超时
     const uint32_t start_tick = HAL_GetTick();
     while ((!s_transfer_complete) && (!s_transfer_error))
     {
@@ -197,6 +201,7 @@ led_driver_status_t bsp_led_driver_commit(void)
         }
     }
 
+    //停止传输
     const HAL_StatusTypeDef stop_status = sk6805_stop_transfer();
     if (s_transfer_error || (HAL_OK != stop_status))
     {

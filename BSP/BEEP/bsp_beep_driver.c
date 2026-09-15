@@ -24,6 +24,7 @@ beep_driver_status_t bsp_beep_driver_set(bool active)
         return BEEP_DRIVER_ERROR_RESOURCE;
     }
 
+    // 设置蜂鸣器引脚电平  低电平有效
     HAL_GPIO_WritePin(beep_GPIO_Port,
                       beep_Pin,
                       active ? GPIO_PIN_RESET : GPIO_PIN_SET);

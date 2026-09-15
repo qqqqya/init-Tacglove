@@ -1,4 +1,4 @@
-# Keep the reference handheld-umi wire definition unchanged.
+
 uint8 EVENT_LONG_PRESS=1
 uint8 EVENT_REC_TOGGLE=2
 uint8 EVENT_DOUBLE_CLICK=3

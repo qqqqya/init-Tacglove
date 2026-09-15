@@ -9,8 +9,7 @@
 
 #include "task_status.h"
 
-/** @brief `LedCmd.led_mode`固定控制的逻辑灯数量。 */
-#define LED_TASK_LED_COUNT 6U
+#define LED_TASK_LED_COUNT 6U/** @brief `LedCmd.led_mode`固定控制的逻辑灯数量。 */
 
 /** @brief PC端可下发的单灯显示模式。 */
 typedef enum

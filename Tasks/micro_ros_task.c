@@ -430,13 +430,13 @@ static void micro_ros_publish_key_events(void)
 {
     uint8_t event_type = 0U;
     while (pdPASS == xQueueReceive(s_key_event_queue, &event_type, 0U))
-    {
+    {//包含的八个队列容量
         micro_ros_fill_stamp(&s_key_state_msg.header.stamp);
         s_key_state_msg.event_type = event_type;
 
         if (RCL_RET_OK == rcl_publish(&s_key_state_pub,
                                       &s_key_state_msg,
-                                      NULL))
+                                      NULL))// 发布按键状态消息
         {
             ++s_message_tx_count;
         }
@@ -500,6 +500,7 @@ task_status_t micro_ros_task_resources_init(void)
         return TASK_OK;
     }
 
+    //创建队列 大小为8  用于存储按键事件
     s_key_event_queue = xQueueCreate(MICRO_ROS_KEY_QUEUE_LENGTH,
                                      sizeof(uint8_t));
     if (NULL == s_key_event_queue)

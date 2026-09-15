@@ -1,4 +1,4 @@
-# Keep the reference handheld-umi wire definition unchanged.
+
 uint8 STATE_IDLE=0
 uint8 STATE_READY=1
 uint8 STATE_ERROR=2

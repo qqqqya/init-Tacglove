@@ -7,7 +7,7 @@
 				{
 					"directoryIndex" : 1,
 					"id" : "stm32cubemx::@768a070a0fe75716b479",
-					"jsonFile" : "target-stm32cubemx-Debug-f79db6a9d9df1755613f.json",
+					"jsonFile" : "target-stm32cubemx-Debug-4f3cf79415f244b897f9.json",
 					"name" : "stm32cubemx",
 					"projectIndex" : 0
 				}
@@ -20,7 +20,7 @@
 					[
 						1
 					],
-					"jsonFile" : "directory-.-Debug-f040eec181a89de70dbe.json",
+					"jsonFile" : "directory-.-Debug-f6f22219c74102c3da70.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "3.22"
@@ -38,7 +38,7 @@
 						0
 					],
 					"build" : "cmake/stm32cubemx",
-					"jsonFile" : "directory-cmake.stm32cubemx-Debug-720efe0a241989607e76.json",
+					"jsonFile" : "directory-cmake.stm32cubemx-Debug-8f353d194551f741f997.json",
 					"minimumCMakeVersion" : 
 					{
 						"string" : "3.22"
@@ -78,14 +78,14 @@
 				{
 					"directoryIndex" : 1,
 					"id" : "STM32_Drivers::@768a070a0fe75716b479",
-					"jsonFile" : "target-STM32_Drivers-Debug-ea5b5fd20c4a6ce2c733.json",
+					"jsonFile" : "target-STM32_Drivers-Debug-fc19c80af3bb3c12fef2.json",
 					"name" : "STM32_Drivers",
 					"projectIndex" : 0
 				},
 				{
 					"directoryIndex" : 0,
 					"id" : "glove_UMI_APP::@6890427a1f51a3e7e1df",
-					"jsonFile" : "target-glove_UMI_APP-Debug-1c2a860cc14c981e6fab.json",
+					"jsonFile" : "target-glove_UMI_APP-Debug-c24a2b681e4436b27bd5.json",
 					"name" : "glove_UMI_APP",
 					"projectIndex" : 0
 				}
@@ -101,6 +101,6 @@
 	"version" : 
 	{
 		"major" : 2,
-		"minor" : 10
+		"minor" : 9
 	}
 }
