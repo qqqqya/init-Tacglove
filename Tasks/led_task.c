@@ -439,8 +439,8 @@ void led_task_entry(void *argument){
         led_task_show_fault();
     }
 
-    bool collecting = false;
-    bool remote_active = false;
+    bool collecting = false;        //是否正在采集LED颜色
+    bool remote_active = false;     //是否正在接收远程cmd
     bool remote_blink_on = true;
     led_task_cmd_t remote_cmd = {0};
     TickType_t next_remote_blink = xTaskGetTickCount();
@@ -482,11 +482,11 @@ void led_task_entry(void *argument){
         if (0U != (actions & LED_ACTION_SHORT_PRESS))// 短按按键
         {
             if (!collecting)
-            {// 未采集
+            {// 空闲状态 切换到采集状态
                 s_system_state = LED_TASK_SYSTEM_PREPARING;
 
                 if (!remote_active)
-                {
+                {//没有远程cmd 正常的采集LED颜色 即led7闪烁
                     led_status = led_task_run_prepare();
                     if (HANDLER_OK != led_status)
                     {
@@ -501,15 +501,16 @@ void led_task_entry(void *argument){
                 }
 
                 if (!remote_active)
-                {
+                {//led7常亮蓝色 其他led常亮绿色
                     led_status = led_task_show_state(COLOR_GREEN,
                                                      COLOR_BLUE);
                 }
                 collecting = true;
+                //  切换到采集状态
                 s_system_state = LED_TASK_SYSTEM_COLLECTING;
             }
             else
-            {
+            {// 已采集 从采集状态切换到空闲状态
                 beep_status = led_task_beep(SHORT_BEEP_TIME_MS);
                 if (BEEP_DRIVER_OK != beep_status)
                 {
@@ -517,11 +518,11 @@ void led_task_entry(void *argument){
                 }
 
                 if (!remote_active)
-                {
+                {//led7 off 其他led常亮蓝色
                     led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
                 }
                 collecting = false;
-                s_system_state = LED_TASK_SYSTEM_IDLE;
+                s_system_state = LED_TASK_SYSTEM_IDLE;// 采集状态 切换到空闲状态
             }
 
             if ((!remote_active) && (HANDLER_OK != led_status))
@@ -531,7 +532,7 @@ void led_task_entry(void *argument){
         }
 
         if (0U != (actions & LED_ACTION_LONG_PRESS))
-        {
+        {// 长按按键
             if (!remote_active)
             {
                 led_status = led_task_show_gesture_feedback(
@@ -543,6 +544,7 @@ void led_task_entry(void *argument){
                 }
             }
 
+            //beep 长鸣
             beep_status = led_task_beep(LONG_BEEP_TIME_MS);
             if (BEEP_DRIVER_OK != beep_status)
             {
@@ -551,7 +553,7 @@ void led_task_entry(void *argument){
         }
 
         if (0U != (actions & LED_ACTION_DOUBLE_CLICK))
-        {
+        {// 双击按键
             for (uint8_t count = 0U; count < 2U; ++count)
             {
                 if (!remote_active)
@@ -587,6 +589,8 @@ void led_task_entry(void *argument){
             next_remote_blink = current_tick +
                                 pdMS_TO_TICKS(
                                     REMOTE_BLINK_HALF_PERIOD_MS);
+
+            //远程cmd在指定闪烁相位下的完整六灯状态
             led_status = led_task_show_remote_cmd(&remote_cmd,
                                                   remote_blink_on);
             if (HANDLER_OK != led_status)

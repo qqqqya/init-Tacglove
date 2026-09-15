@@ -18,7 +18,7 @@
 /** @brief 一个字节内的数据位数。 */
 #define SK6805_BITS_PER_BYTE 8U
 
-/** @brief 六颗灯一帧的数据码元数。--bit数 6*3*8 */
+/** @brief 六颗灯一帧的数据码元数。--bit数 6*3*8 --144*/
 #define SK6805_DATA_SLOT_COUNT \
     (BSP_LED_PIXEL_COUNT * SK6805_BYTES_PER_PIXEL * SK6805_BITS_PER_BYTE)
 
@@ -31,9 +31,9 @@
 /** @brief 256 个零占空比周期为 DMA 预装留出裕量，确保复位低电平不小于 300 us。 */
 #define SK6805_RESET_SLOT_COUNT 256U    //有些版本300us  有些版本80us--------256*1.2us
 
-/** @brief DMA 帧包含前置复位、像素数据和后置复位。--656个时钟周期 */
+/** @brief DMA 帧包含前置复位、像素数据和后置复位。--656个时钟周期   2u原始  400-1u也是正常的 */
 #define SK6805_DMA_SLOT_COUNT \
-    ((2U * SK6805_RESET_SLOT_COUNT) + SK6805_DATA_SLOT_COUNT)
+    ((1U * SK6805_RESET_SLOT_COUNT) + SK6805_DATA_SLOT_COUNT)//前一个的后置复位，实际上可以当做后一个的前置复位--1u的现象也是正常的 
 
 /** @brief PWM DMA 传输完成等待超时，单位 ms。 */
 #define SK6805_TRANSFER_TIMEOUT_MS 5U
@@ -80,10 +80,10 @@ static void sk6805_build_dma_frame(void)
         s_pwm_dma_buffer[slot] = 0U;
     }
 
-
+    //先跳过256cycle的复位周期 已经设置为0了
     uint16_t slot_index = SK6805_RESET_SLOT_COUNT;
     for (uint8_t pixel = 0U; pixel < BSP_LED_PIXEL_COUNT; ++pixel)
-    {
+    {   //设置6led的GRB值 缓存信息数据
         sk6805_encode_byte(s_pixels[pixel][0], &slot_index);//设置G通道比较值 8位
         sk6805_encode_byte(s_pixels[pixel][1], &slot_index);
         sk6805_encode_byte(s_pixels[pixel][2], &slot_index);
@@ -169,7 +169,7 @@ led_driver_status_t bsp_led_driver_commit(void){
         return LED_ERRORRESOURCE;
     }
 
-    sk6805_build_dma_frame();
+    sk6805_build_dma_frame();//设置reset + data数据缓存 buffer
     s_transfer_complete = false;
     s_transfer_error = false;
 

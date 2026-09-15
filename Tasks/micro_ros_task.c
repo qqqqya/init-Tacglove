@@ -451,7 +451,7 @@ static void micro_ros_publish_mcu_status(void)
         (uint32_t)(((uint64_t)xTaskGetTickCount() *
                     portTICK_PERIOD_MS) /
                    1000ULL);
-    s_mcu_status_msg.system_state = micro_ros_get_mcu_state();
+    s_mcu_status_msg.system_state = micro_ros_get_mcu_state();//LED业务状态映射到参考工程MCUStatus的状态枚举
     s_mcu_status_msg.agent_connected = s_agent_connected;
     s_mcu_status_msg.message_tx_count = s_message_tx_count;
     s_mcu_status_msg.message_rx_count = s_message_rx_count;
@@ -542,8 +542,8 @@ void micro_ros_task_entry(void *argument)
         vTaskSuspend(NULL);
     }
 
-    micro_ros_init_messages();
-    micro_ros_zero_entities();
+    micro_ros_init_messages();//ROS消息对象绑定到全部静态字符串缓冲区
+    micro_ros_zero_entities();//初始化ROS实体
 
     if (RMW_RET_OK != rmw_uros_set_custom_transport(
                           true,
