@@ -11,15 +11,9 @@
 #include "led_task.h"
 #include "micro_ros_task.h"
 
-#define LED_TASK_STACK_WORDS       256U
-#define LED_TASK_PRIORITY          (tskIDLE_PRIORITY + 1U)
-#define KEY_TASK_STACK_WORDS       128U
-#define KEY_TASK_PRIORITY          (tskIDLE_PRIORITY + 2U)
-#define MICRO_ROS_TASK_STACK_WORDS 4096U
-#define MICRO_ROS_TASK_PRIORITY    (tskIDLE_PRIORITY + 2U)
+TaskHandle_t g_led_task_handle;
 
-task_status_t task_manager_init(void)
-{
+task_status_t task_manager_init(void){
     /* 初始化LED key等 存储cmd的队列/邮箱 */
     task_status_t status = led_task_resources_init();
     if (TASK_OK != status)
@@ -39,7 +33,7 @@ task_status_t task_manager_init(void)
                                      LED_TASK_STACK_WORDS,
                                      NULL,
                                      LED_TASK_PRIORITY,
-                                     NULL);
+                                     &g_led_task_handle);
     if (pdPASS != result)
     {
         return TASK_ERROR_NO_MEMORY;

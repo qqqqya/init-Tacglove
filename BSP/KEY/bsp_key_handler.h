@@ -1,6 +1,6 @@
 /**
  * @file bsp_key_handler.h
- * @brief PA11数据采集按键状态机接口。
+ * @brief PA0数据采集按键状态机接口。
  */
 #ifndef BSP_KEY_HANDLER_H
 #define BSP_KEY_HANDLER_H
@@ -10,6 +10,11 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/** @brief 数据采集按键状态机时序参数，单位ms。 */
+#define KEY_DEBOUNCE_TIME_MS     20U
+#define KEY_LONG_PRESS_TIME_MS   400U
+#define KEY_DOUBLE_CLICK_TIME_MS 350U
 
 typedef enum
 {
@@ -46,12 +51,12 @@ typedef enum
 /**
  * @brief 初始化单路数据采集按键状态机。
  * @retval KEY_HANDLER_OK 初始化成功。
- * @note PA11输入上拉由CubeMX生成的GPIO代码完成。
+ * @note PA0输入上拉由CubeMX生成的GPIO代码完成。
  */
 key_handler_status_t bsp_key_handler_init(void);
 
 /**
- * @brief 读取PA11并向前推进一次按键状态机。
+ * @brief 读取PA0并向前推进一次按键状态机。
  * @retval KEY_HANDLER_OK 处理成功。
  * @retval KEY_HANDLER_ERROR_RESOURCE Handler尚未初始化。
  * @note 应由任务每1 ms调用一次。

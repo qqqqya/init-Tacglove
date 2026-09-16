@@ -4,7 +4,7 @@
 import rclpy
 from rclpy.node import Node
 
-from common_msgs.msg import ButtonEvent, MCUStatus
+from common_msgs.msg import KeyState, MCUStatus
 from common_msgs.srv import DeviceSynchronization
 
 
@@ -14,7 +14,7 @@ class Stage3PcTest(Node):
     def __init__(self) -> None:
         super().__init__("stage3_pc_test")
         self.create_subscription(
-            ButtonEvent,
+            KeyState,
             "/mcu_dev/key_state",
             self._on_key_state,
             10,
@@ -31,7 +31,7 @@ class Stage3PcTest(Node):
             self._on_sync,
         )
 
-    def _on_key_state(self, message: ButtonEvent) -> None:
+    def _on_key_state(self, message: KeyState) -> None:
         self.get_logger().info(
             f"key event={message.event_type} "
             f"stamp={message.header.stamp.sec}."

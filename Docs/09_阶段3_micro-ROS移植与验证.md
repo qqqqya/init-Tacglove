@@ -13,8 +13,8 @@
 - 从 `handheld-umi/Application/Middleware/Micro-ROS`复用include、`libmicroros.a`、时间适配和FreeRTOS分配器思路；
 - 使用独立25 KB micro-ROS heap，避免ROS实体动态内存与FreeRTOS任务栈争用同一个heap；
 - MCU节点固定为 `mcu_dev`，Domain ID固定为9；
-- `ButtonEvent`、`MCUStatus`、`DeviceSynchronization`保持参考工程线格式不变；
-- 新增 `LedCmd` 的六元素结构和micro XRCE-DDS CDR类型支持；
+- `KeyState`保留参考按键消息字段/枚举并与topic同名，`MCUStatus`、`DeviceSynchronization`保持参考工程线格式不变；
+- 新增 `LedCmd` 的六元素灯光数组、蜂鸣器字段和micro XRCE-DDS CDR类型支持；
 - Executor容量为2，只处理一个subscription和一个service client；两个publisher不占Executor handle。
 
 ### 2.2 USART2 DMA传输
@@ -58,7 +58,7 @@ Agent未启动、USB拔出或同步服务未启动都不会复位MCU。Agent断�
 ```text
 PA0 → bsp_key_handler → key_task
                        ├── 原有本地LED/蜂鸣器动作
-                       └── 8元素ButtonEvent Queue
+                       └── 8元素KeyState Queue
                                       ↓
                               micro_ros_task
                                       ↓
@@ -67,7 +67,7 @@ PA0 → bsp_key_handler → key_task
 
 ROS事件值保持参考工程定义：
 
-| 本地事件 | ROS事件值 | `ButtonEvent`常量 |
+| 本地事件 | ROS事件值 | `KeyState`常量 |
 |---|---:|---|
 | 长按 | 1 | `EVENT_LONG_PRESS` |
 | 单击 | 2 | `EVENT_REC_TOGGLE` |
@@ -79,7 +79,7 @@ Agent未连接或Queue满时只丢弃ROS上报，本地动作不受影响，也�
 
 ```text
 /mcu_dev/led_cmd → micro_ros_task回调
-                  ↓ 校验六个模式值
+                  ↓ 校验六个灯光模式值和蜂鸣器模式
               单元素最新值Queue
                   ↓
                led_task
@@ -87,7 +87,7 @@ Agent未连接或Queue满时只丢弃ROS上报，本地动作不受影响，也�
         BSP Handler → TIM3 PWM DMA
 ```
 
-`led_mode[6]`按LED2、LED3、LED4、LED5、LED6、LED7排列。模式定义为：
+`led_mode[6]`按LED2、LED3、LED4、LED5、LED6、LED7排列；`beep_mode`控制蜂鸣器。灯光模式定义为：
 
 | 值 | 模式 |
 |---:|---|
@@ -98,7 +98,7 @@ Agent未连接或Queue满时只丢弃ROS上报，本地动作不受影响，也�
 | 4 | 蓝色闪烁 |
 | 5 | 蓝色常亮 |
 
-闪烁半周期固定为250 ms，亮度继续使用MCU端 `LED_BRIGHTNESS=1`。任一元素大于5时整条cmd拒绝，不会先更新部分灯。Queue长度为1，新cmd覆盖尚未执行的旧cmd。
+闪烁半周期固定为250 ms。任一灯元素大于5或 `beep_mode`大于3时整条cmd拒绝，不会先更新部分输出。蜂鸣器模式0~3依次为关闭、短鸣200 ms、长鸣600 ms、两次150 ms鸣叫（间隔250 ms）。Queue长度为1，新cmd覆盖尚未执行的旧cmd。
 
 本地LED状态在收到第一条合法远程cmd前保持不变；远程控制生效后，按键仍然发布事件并驱动蜂鸣器，但不临时覆盖PC指定的灯色。Agent断线后恢复“相机灯绿色常亮、LED7按当前采集状态显示”的本地画面。
 
@@ -124,7 +124,7 @@ MCU作为 `/mcu_dev/sync` 的service client。PC返回 `sync_state=true` 和ROS�
 
 ```text
 我们维护的协议源文件
-  ButtonEvent.msg / MCUStatus.msg / LedCmd.msg
+  KeyState.msg / MCUStatus.msg / LedCmd.msg
   DeviceSynchronization.srv
                     │
                     ├── PC端：colcon + rosidl生成
@@ -187,7 +187,7 @@ MCU作为 `/mcu_dev/sync` 的service client。PC返回 `sync_state=true` 和ROS�
 | `include/common_msgs/.../__struct.h` | rosidl从接口定义生成的C结构 | 原则上重新生成，不手改 |
 | `...__type_support.h/.c` | rosidl/micro XRCE-DDS生成的类型支持和序列化代码 | 原则上重新生成，不手改 |
 | WSL `build/`、`install/`、`log/` | colcon构建生成 | 可删除重建，不作为源文件修改 |
-| WSL生成的 `_button_event.py`等 | rosidl Python生成器 | PC运行时导入，不手改 |
+| WSL生成的 `_key_state.py`等 | rosidl Python生成器 | PC运行时导入，不手改 |
 
 当前 `LedCmd`是一个明确的阶段3例外：参考 `libmicroros.a`没有这个新类型，所以工程暂时加入了：
 
@@ -196,7 +196,7 @@ MCU作为 `/mcu_dev/sync` 的service client。PC返回 `sync_state=true` 和ROS�
 - `Middleware/Micro-ROS/include/common_msgs/msg/detail/led_cmd__rosidl_typesupport_microxrcedds_c.h`；
 - `Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c`。
 
-它们按 `LedCmd.msg`的固定六元素线格式实现并参与MCU构建。阶段3验收后，应建立完整的micro-ROS静态库生成工作区，由同一份 `Interfaces/common_msgs`统一重新生成这些文件和 `libmicroros.a`，再删除手工补充的类型支持，避免长期维护两份定义。
+它们按 `LedCmd.msg`的固定六元素线格式实现并参与MCU构建。当前 `.a` 是从参考工程复用的现成产物；PC端 `colcon build common_msgs` 和 Agent 的 `build_agent.sh` 都不会自动重建它。阶段3验收后，应建立完整的MCU交叉编译静态库生成工作区，以同一份 `Interfaces/common_msgs` 为源重新生成配套头文件、类型支持和 `libmicroros.a`，再删除手工补充的类型支持。这里要避免的是“接口源定义与临时手工实现逐渐不一致”，**不是要求人为维护两份 `.msg/.srv` 定义**。生成输入与调用链详见 [09-疑问回答_阶段3micro-ROS生成与调用链.md](09-疑问回答_阶段3micro-ROS生成与调用链.md)。
 
 ### 3.3 XML、msg、srv、CMakeLists分别是什么
 
@@ -225,7 +225,7 @@ Interfaces/common_msgs/package.xml
 
 ```cmake
 rosidl_generate_interfaces(${PROJECT_NAME}
-    "msg/ButtonEvent.msg"
+    "msg/KeyState.msg"
     "msg/MCUStatus.msg"
     "msg/LedCmd.msg"
     "srv/DeviceSynchronization.srv"
@@ -242,9 +242,10 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 ```text
 std_msgs/Header header
 uint8[6] led_mode
+uint8 beep_mode
 ```
 
-表示 `LedCmd`包含一个ROS标准Header和固定6字节的LED模式数组。文件中的常量如 `MODE_OFF=0`也属于双方通信协议。
+表示 `LedCmd`包含一个ROS标准Header、固定6字节的LED模式数组和一个蜂鸣器模式。文件中的常量如 `MODE_OFF=0`、`MODE_SHORT_BEEP=1`也属于双方通信协议。
 
 #### 3.3.4 `.srv`
 
@@ -264,7 +265,7 @@ bool sync_state
 ROS 2生成器会先把 `.msg/.srv`规范化为IDL，再生成不同语言代码。因此MCU头文件顶部会看到：
 
 ```text
-generated ... with input from common_msgs:msg/ButtonEvent.idl
+generated ... with input from common_msgs:msg/KeyState.idl
 ```
 
 这不表示还需要在STM32工程中手写一份XML或IDL；它只是生成链路留下的来源说明。当前RCLC通过C API创建node、publisher、subscription和client，没有使用需要我们维护的“XRCE实体XML配置文件”。STM32的 `.ioc`也不是ROS package XML，它是CubeMX的外设配置文件。
@@ -415,7 +416,7 @@ colcon list | grep '^common_msgs[[:space:]]'
 ```text
 src/common_msgs/CMakeLists.txt
 src/common_msgs/package.xml
-src/common_msgs/msg/ButtonEvent.msg
+src/common_msgs/msg/KeyState.msg
 src/common_msgs/msg/LedCmd.msg
 src/common_msgs/msg/MCUStatus.msg
 src/common_msgs/srv/DeviceSynchronization.srv
@@ -503,7 +504,7 @@ ros2 pkg prefix common_msgs
 只有 `ros2 pkg prefix common_msgs` 成功后，才执行：
 
 ```bash
-ros2 interface show common_msgs/msg/ButtonEvent
+ros2 interface show common_msgs/msg/KeyState
 ros2 interface show common_msgs/msg/MCUStatus
 ros2 interface show common_msgs/msg/LedCmd
 ros2 interface show common_msgs/srv/DeviceSynchronization
@@ -512,7 +513,7 @@ ros2 interface show common_msgs/srv/DeviceSynchronization
 再检查Python类型能否导入：
 
 ```bash
-python3 -c 'from common_msgs.msg import ButtonEvent, MCUStatus, LedCmd; from common_msgs.srv import DeviceSynchronization; print("common_msgs Python import OK")'
+python3 -c 'from common_msgs.msg import KeyState, MCUStatus, LedCmd; from common_msgs.srv import DeviceSynchronization; print("common_msgs Python import OK")'
 ```
 
 预期打印：
@@ -1060,7 +1061,7 @@ ros2 topic echo /mcu_dev/key_state
 
 ```bash
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [0, 0, 0, 0, 0, 0]}"
+  "{header: {frame_id: pc}, led_mode: [0, 0, 0, 0, 0, 0], beep_mode: 0}"
 ```
 
 以下命令只测试LED2，其余灯保持灭；每条执行后观察至少2秒：
@@ -1068,23 +1069,23 @@ ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
 ```bash
 # LED2绿色常亮
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [1, 0, 0, 0, 0, 0]}"
+  "{header: {frame_id: pc}, led_mode: [1, 0, 0, 0, 0, 0], beep_mode: 0}"
 
 # LED2绿色闪烁，半周期250 ms
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [2, 0, 0, 0, 0, 0]}"
+  "{header: {frame_id: pc}, led_mode: [2, 0, 0, 0, 0, 0], beep_mode: 0}"
 
 # LED2红色常亮
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [3, 0, 0, 0, 0, 0]}"
+  "{header: {frame_id: pc}, led_mode: [3, 0, 0, 0, 0, 0], beep_mode: 0}"
 
 # LED2蓝色闪烁，半周期250 ms
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [4, 0, 0, 0, 0, 0]}"
+  "{header: {frame_id: pc}, led_mode: [4, 0, 0, 0, 0, 0], beep_mode: 0}"
 
 # LED2蓝色常亮
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [5, 0, 0, 0, 0, 0]}"
+  "{header: {frame_id: pc}, led_mode: [5, 0, 0, 0, 0, 0], beep_mode: 0}"
 ```
 
 如果实际亮的是其他逻辑灯，记录“cmd数组下标→实际LED编号”；这通常是Handler物理映射问题，而不是ROS类型问题。
@@ -1095,14 +1096,14 @@ ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
 
 ```bash
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [1, 2, 3, 4, 5, 0]}"
+  "{header: {frame_id: pc}, led_mode: [1, 2, 3, 4, 5, 0], beep_mode: 0}"
 ```
 
 恢复本项目的常规待机画面：
 
 ```bash
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [1, 1, 1, 1, 1, 0]}"
+  "{header: {frame_id: pc}, led_mode: [1, 1, 1, 1, 1, 0], beep_mode: 0}"
 ```
 
 ### 6.12 验证非法cmd整帧拒绝
@@ -1111,12 +1112,32 @@ ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
 
 ```bash
 ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
-  "{header: {frame_id: pc}, led_mode: [0, 0, 0, 0, 0, 6]}"
+  "{header: {frame_id: pc}, led_mode: [0, 0, 0, 0, 0, 6], beep_mode: 0}"
 ```
 
 预期六灯保持上一合法帧，不能出现前五颗先熄灭、只有第六颗拒绝的部分更新。终端B下一帧MCU状态中的 `rx`仍会增加，因为该计数表示进入回调的消息数量，不代表cmd执行成功。
 
-### 6.13 验证Agent停止和恢复
+### 6.13 验证蜂鸣器cmd
+
+每次保持六灯全灭，分别下发短鸣、长鸣和两次鸣叫：
+
+```bash
+ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
+  "{header: {frame_id: pc}, led_mode: [0, 0, 0, 0, 0, 0], beep_mode: 1}"
+
+ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
+  "{header: {frame_id: pc}, led_mode: [0, 0, 0, 0, 0, 0], beep_mode: 2}"
+
+ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
+  "{header: {frame_id: pc}, led_mode: [0, 0, 0, 0, 0, 0], beep_mode: 3}"
+
+ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
+  "{header: {frame_id: pc}, led_mode: [0, 0, 0, 0, 0, 0], beep_mode: 0}"
+```
+
+预期依次为200 ms短鸣、600 ms长鸣、150 ms鸣叫两次且中间静音250 ms、保持静音。蜂鸣动作由LED任务顺序执行，最长会暂时占用该任务600 ms，但不阻塞按键扫描任务和micro-ROS任务。
+
+### 6.14 验证Agent停止和恢复
 
 1. 记录当前 `uptime`、`tx`、`rx`和灯状态；
 2. 在终端A按 `Ctrl+C`停止Agent；
@@ -1129,7 +1150,7 @@ ros2 topic pub --once /mcu_dev/led_cmd common_msgs/msg/LedCmd \
 
 Agent断线会退出远程LED控制，因此断线后的灯应恢复本地状态；重连本身不会自动恢复断线前的远程cmd，必须由PC重新下发。
 
-### 6.14 验证USB拔插
+### 6.15 验证USB拔插
 
 1. 先停止Agent，避免它持续占用已消失的设备；
 2. 拔掉USB，等待3秒，再重新插入；
@@ -1138,7 +1159,7 @@ Agent断线会退出远程LED控制，因此断线后的灯应恢复本地状态
 5. 用新路径启动Agent并重复6.8~6.11；
 6. USB拔插重复10次。
 
-### 6.15 8小时长稳
+### 6.16 8小时长稳
 
 Agent、测试脚本和MCU都稳定后再开始长稳：
 

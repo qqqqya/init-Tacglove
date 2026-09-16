@@ -24,8 +24,7 @@ static const uint8_t s_led_to_pixel[BSP_LED_ID_COUNT] = {
  * @return 与底层错误原因对应的 LED Handler 层状态。
  */
 static led_handler_status_t led_handler_convert_driver_status(
-    led_driver_status_t driver_status)
-{
+    led_driver_status_t driver_status){
     led_handler_status_t handler_status = HANDLER_ERROR;
 
     switch (driver_status)
@@ -70,8 +69,7 @@ static led_handler_status_t led_handler_convert_driver_status(
 
 
 
-led_handler_status_t bsp_led_handler_init(void)
-{
+led_handler_status_t bsp_led_handler_init(void){
     led_driver_status_t driver_status = bsp_led_driver_init();
     if (LED_OK != driver_status)
     {
@@ -87,8 +85,7 @@ led_handler_status_t bsp_led_handler_init(void)
 }
 
 led_handler_status_t bsp_led_handler_set(bsp_led_id_t led,
-                                          bsp_led_color_t color)
-{
+                                          bsp_led_color_t color){
     if ((uint32_t)BSP_LED_ID_COUNT <= (uint32_t)led)
     {
         return HANDLER_ERRORPARAMETER;
@@ -100,8 +97,7 @@ led_handler_status_t bsp_led_handler_set(bsp_led_id_t led,
     // return led_handler_convert_driver_status(driver_status);
 }
 
-led_handler_status_t bsp_led_handler_set_all_cameras(bsp_led_color_t color)
-{
+led_handler_status_t bsp_led_handler_set_all_cameras(bsp_led_color_t color){
     // 设置所有相机指示灯--五个指示灯 为指定颜色
     for (bsp_led_id_t led = BSP_LED_CAMERA_1;
          led <= BSP_LED_CAMERA_5;
@@ -118,14 +114,12 @@ led_handler_status_t bsp_led_handler_set_all_cameras(bsp_led_color_t color)
     return HANDLER_OK;
 }
 
-void bsp_led_handler_clear(void)
-{//清空六颗业务逻辑灯的软件缓存。
+void bsp_led_handler_clear(void){//清空六颗业务逻辑灯的软件缓存。
 // @note 本函数不发送数据，需随后调用 bsp_led_handler_commit()。
     bsp_led_driver_clear();
 }
 
-led_handler_status_t bsp_led_handler_commit(void)
-{
+led_handler_status_t bsp_led_handler_commit(void){
     const led_driver_status_t driver_status = bsp_led_driver_commit();
 
     return driver_status;

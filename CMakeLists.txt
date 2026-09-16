@@ -57,6 +57,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Middleware/Micro-ROS/extra_sources/microros_allocators.c
     Middleware/Micro-ROS/extra_sources/microros_time.c
     Middleware/Micro-ROS/extra_sources/microros_transports/dma_transport.c
+    Middleware/Micro-ROS/extra_sources/custom_types/key_state_type_support.c
     Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c
 
     Middleware/FreeRTOS/croutine.c

@@ -13,10 +13,7 @@
 #include "led_task.h"
 #include "micro_ros_task.h"
 
-#define KEY_TASK_PERIOD_MS 1U
-
-void key_task_entry(void *argument)
-{
+void key_task_entry(void *argument){
     key_handler_status_t status = bsp_key_handler_init();
     if (KEY_HANDLER_OK != status)
     {

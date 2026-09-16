@@ -1,6 +1,6 @@
 /**
  * @file bsp_key_handler.c
- * @brief PA11低电平有效数据采集按键状态机实现。
+ * @brief PA0低电平有效数据采集按键状态机实现。
  */
 #include "bsp_key_handler.h"
 
@@ -8,10 +8,6 @@
 #include <stdint.h>
 
 #include "main.h"
-
-#define KEY_DEBOUNCE_TIME_MS     20U
-#define KEY_LONG_PRESS_TIME_MS   400U
-#define KEY_DOUBLE_CLICK_TIME_MS 350U
 
 typedef struct
 {
@@ -28,11 +24,10 @@ static bool s_key_initialized;
 static key_control_t s_key;
 
 /**
- * @brief 读取PA11按键是否处于低电平按下状态。
+ * @brief 读取PA0按键是否处于低电平按下状态。
  * @return true表示按下，false表示松开。
  */
-static bool key_read_level(void)
-{
+static bool key_read_level(void){
     return GPIO_PIN_RESET ==
            HAL_GPIO_ReadPin(key_cap_GPIO_Port, key_cap_Pin);
 }
@@ -46,13 +41,11 @@ static bool key_read_level(void)
  */
 static bool key_time_reached(uint32_t current_tick,
                              uint32_t start_tick,
-                             uint32_t duration_ms)
-{
+                             uint32_t duration_ms){
     return duration_ms <= (current_tick - start_tick);
 }
 
-key_handler_status_t bsp_key_handler_init(void)
-{
+key_handler_status_t bsp_key_handler_init(void){
     /** @brief 初始化按键状态机
     状态空闲
     事件无
@@ -69,8 +62,7 @@ key_handler_status_t bsp_key_handler_init(void)
     return KEY_HANDLER_OK;
 }
 
-key_handler_status_t bsp_key_handler_process(void)
-{
+key_handler_status_t bsp_key_handler_process(void){
     if (!s_key_initialized)
     {
         return KEY_HANDLER_ERROR_RESOURCE;
@@ -213,8 +205,7 @@ key_handler_status_t bsp_key_handler_process(void)
     return KEY_HANDLER_OK;
 }
 
-key_handler_status_t bsp_key_handler_get_event(key_event_t *event)
-{
+key_handler_status_t bsp_key_handler_get_event(key_event_t *event){
     if (NULL == event)
     {
         return KEY_HANDLER_ERROR_PARAMETER;
@@ -229,8 +220,7 @@ key_handler_status_t bsp_key_handler_get_event(key_event_t *event)
     return KEY_HANDLER_OK;
 }
 
-key_handler_status_t bsp_key_handler_clear_event(void)
-{
+key_handler_status_t bsp_key_handler_clear_event(void){
     if (!s_key_initialized)
     {
         return KEY_HANDLER_ERROR_RESOURCE;

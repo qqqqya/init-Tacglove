@@ -14,25 +14,6 @@
 #include "bsp_beep_driver.h"
 #include "bsp_led_handler.h"
 
-#define SELF_TEST_BLINK_COUNT           3U       // 自检闪烁次数
-#define SELF_TEST_HALF_PERIOD_MS        250U     // 自检闪烁周期 
-#define PREPARE_BLINK_COUNT             3U       // 准备闪烁次数
-#define PREPARE_HALF_PERIOD_MS          250U     // 准备闪烁周期 
-
-#define SHORT_BEEP_TIME_MS              120U     // 短蜂鸣时间
-#define LONG_BEEP_TIME_MS               600U     // 长蜂鸣时间
-#define DOUBLE_BEEP_TIME_MS             100U     // 双蜂鸣时间
-#define DOUBLE_BEEP_INTERVAL_MS         100U     // 双蜂鸣间隔
-
-#define LONG_FEEDBACK_TIME_MS           600U     // 长反馈时间
-#define DOUBLE_FEEDBACK_TIME_MS         100U     // 双反馈时间
-#define REMOTE_BLINK_HALF_PERIOD_MS     250U     // 远程闪烁周期
-#define LED_TASK_PERIOD_MS              1U       // LED任务周期
-#define LED_BRIGHTNESS                  2U       // LED亮度，0-255
-
-#define LED_ACTION_SHORT_PRESS  (1UL << 0U) // 短按按键  1
-#define LED_ACTION_LONG_PRESS   (1UL << 1U) // 长按按键  2
-#define LED_ACTION_DOUBLE_CLICK (1UL << 2U) // 双击按键  4
 /**
  * @brief LED颜色定义。
  */
@@ -47,9 +28,9 @@ typedef struct
 {
     bool enabled;
     uint8_t led_mode[LED_TASK_LED_COUNT]; //led_mode 非空数组，按LED2、LED3、LED4、LED5、LED6、LED7排列。
+    uint8_t beep_mode;
 } led_task_cmd_t;
 
-static volatile uint32_t s_pending_actions;// 待处理按键事件
 static volatile bool s_led_ready;
 static volatile uint8_t s_system_state = LED_TASK_SYSTEM_SELF_TEST;// 系统状态
 static QueueHandle_t s_led_cmd_queue;
@@ -64,8 +45,7 @@ static QueueHandle_t s_led_cmd_queue;
  */
 static task_status_t led_task_mode_to_color(uint8_t mode,
                                             bool blink_on,
-                                            bsp_led_color_t *color)
-{
+                                            bsp_led_color_t *color){
     if (NULL == color)
     {
         return TASK_ERROR_PARAMETER;
@@ -109,8 +89,7 @@ static task_status_t led_task_mode_to_color(uint8_t mode,
  * @param cmd 非空远程cmd指针。
  * @return true表示需要周期切换闪烁相位。
  */
-static bool led_task_cmd_has_blink(const led_task_cmd_t *cmd)
-{
+static bool led_task_cmd_has_blink(const led_task_cmd_t *cmd){
     for (uint8_t index = 0U; index < LED_TASK_LED_COUNT; ++index)
     {
         if ((LED_TASK_MODE_GREEN_BLINK == cmd->led_mode[index]) ||
@@ -131,8 +110,7 @@ static bool led_task_cmd_has_blink(const led_task_cmd_t *cmd)
  */
 static led_handler_status_t led_task_show_remote_cmd(
     const led_task_cmd_t *cmd,
-    bool blink_on)
-{
+    bool blink_on){
     bsp_led_handler_clear();// 清空LED缓存数据层
 
     for (uint8_t index = 0U; index < LED_TASK_LED_COUNT; ++index)
@@ -164,8 +142,7 @@ static led_handler_status_t led_task_show_remote_cmd(
  */
 static led_handler_status_t led_task_show_state(
     bsp_led_color_t camera_color,
-    bsp_led_color_t system_color)
-{
+    bsp_led_color_t system_color){
     bsp_led_handler_clear();
 
     led_handler_status_t status =
@@ -189,8 +166,7 @@ static led_handler_status_t led_task_show_state(
  * @return LED Handler层状态。
  * @note LED7在整个上电自检过程中保持熄灭。
  */
-static led_handler_status_t led_task_run_self_test(void)
-{
+static led_handler_status_t led_task_run_self_test(void){
     for (uint8_t blink = 0U; blink < SELF_TEST_BLINK_COUNT; ++blink)
     {
         led_handler_status_t status =
@@ -216,8 +192,7 @@ static led_handler_status_t led_task_run_self_test(void)
  * @brief 让LED7蓝色闪烁表示进入数据采集准备状态。
  * @return LED Handler层状态。
  */
-static led_handler_status_t led_task_run_prepare(void)
-{
+static led_handler_status_t led_task_run_prepare(void){
     for (uint8_t blink = 0U; blink < PREPARE_BLINK_COUNT; ++blink)
     {
         led_handler_status_t status =
@@ -244,8 +219,7 @@ static led_handler_status_t led_task_run_prepare(void)
  * @param duration_ms 蜂鸣持续时间，单位ms，必须大于0。
  * @return 蜂鸣器Driver层状态。
  */
-static beep_driver_status_t led_task_beep(uint32_t duration_ms)
-{
+static beep_driver_status_t led_task_beep(uint32_t duration_ms){
     beep_driver_status_t status = bsp_beep_driver_set(true);
     if (BEEP_DRIVER_OK != status)
     {
@@ -257,6 +231,47 @@ static beep_driver_status_t led_task_beep(uint32_t duration_ms)
 }
 
 /**
+ * @brief 执行PC下发的蜂鸣器模式。
+ * @param beep_mode LED_TASK_BEEP_xxx蜂鸣器模式。
+ * @return 蜂鸣器Driver层状态。
+ * @note MODE_BEEPING沿用参考工程语义：150 ms鸣叫两次，中间静音250 ms。
+ */
+static beep_driver_status_t led_task_apply_remote_beep(uint8_t beep_mode){
+    switch (beep_mode)
+    {
+        case LED_TASK_BEEP_OFF:
+            return bsp_beep_driver_set(false);
+
+        case LED_TASK_BEEP_SHORT:
+            return led_task_beep(REMOTE_SHORT_BEEP_TIME_MS);
+
+        case LED_TASK_BEEP_LONG:
+            return led_task_beep(REMOTE_LONG_BEEP_TIME_MS);
+
+        case LED_TASK_BEEPING:
+            for (uint8_t count = 0U; count < 2U; ++count)
+            {
+                const beep_driver_status_t status =
+                    led_task_beep(REMOTE_BEEPING_TIME_MS);
+                if (BEEP_DRIVER_OK != status)
+                {
+                    return status;
+                }
+
+                if (0U == count)
+                {
+                    vTaskDelay(pdMS_TO_TICKS(
+                        REMOTE_BEEPING_INTERVAL_MS));
+                }
+            }
+            return BEEP_DRIVER_OK;
+
+        default:
+            return BEEP_DRIVER_ERROR_PARAMETER;
+    }
+}
+
+/**
  * @brief 临时反转LED7，用于观察长按或双击是否被正确识别。
  * @param collecting true表示当前处于采集中状态。
  * @param hold_ms 反转状态保持时间，单位ms。
@@ -264,8 +279,7 @@ static beep_driver_status_t led_task_beep(uint32_t duration_ms)
  */
 static led_handler_status_t led_task_show_gesture_feedback(
     bool collecting,
-    uint32_t hold_ms)
-{
+    uint32_t hold_ms){
     const bsp_led_color_t feedback_color = collecting ? COLOR_OFF : COLOR_BLUE;
     led_handler_status_t status =
         led_task_show_state(COLOR_GREEN, feedback_color);
@@ -280,39 +294,35 @@ static led_handler_status_t led_task_show_gesture_feedback(
 }
 
 /**
- * @brief 原子取出并清空当前待处理的按键动作位。
+ * @brief 取出并清空按键任务发送给当前LED任务的通知动作位。
  * @return 待处理动作位掩码。
  */
-static uint32_t led_task_take_pending_actions(void)
-{
-    taskENTER_CRITICAL();
-    const uint32_t actions = s_pending_actions;
-    s_pending_actions = 0U;
-    taskEXIT_CRITICAL();
+static uint32_t led_task_take_notified_actions(void){
+    uint32_t actions = 0U;
+    (void)xTaskNotifyWait(0U,
+                          LED_TASK_NOTIFY_ALL,
+                          &actions,
+                          0U);
     return actions;
 }
 
 /**
- * @brief 原子记录一个由按键任务直接提交的LED动作。
- * @param action LED_ACTION_xxx动作位。
+ * @brief 使用FreeRTOS Task Notification向LED任务设置一个按键动作位。
+ * @param action LED_TASK_NOTIFY_xxx动作位。
  */
-static void led_task_request_action(uint32_t action)
-{
-    if (!s_led_ready)
+static void led_task_notify_action(uint32_t action){
+    if ((!s_led_ready) || (NULL == g_led_task_handle))
     {
         return;
     }
 
-    taskENTER_CRITICAL();// 确保原子性  进入临界区
-    s_pending_actions |= action;
-    taskEXIT_CRITICAL();
+    (void)xTaskNotify(g_led_task_handle, action, eSetBits);
 }
 
 /**
  * @brief 显示六灯红色常亮故障状态并停止正常流程。
  */
-static void led_task_show_fault(void)
-{
+static void led_task_show_fault(void){
     s_system_state = LED_TASK_SYSTEM_ERROR;
     (void)bsp_beep_driver_set(false);
     (void)led_task_show_state(COLOR_RED, COLOR_RED);
@@ -323,8 +333,7 @@ static void led_task_show_fault(void)
     }
 }
 
-task_status_t led_task_resources_init(void)
-{
+task_status_t led_task_resources_init(void){
     if (NULL != s_led_cmd_queue)
     {
         return TASK_OK;
@@ -341,8 +350,8 @@ task_status_t led_task_resources_init(void)
 }
 
 task_status_t led_task_submit_cmd(
-    const uint8_t led_mode[LED_TASK_LED_COUNT])
-{
+    const uint8_t led_mode[LED_TASK_LED_COUNT],
+    uint8_t beep_mode){
     if (NULL == led_mode)
     {
         return TASK_ERROR_PARAMETER;
@@ -351,6 +360,11 @@ task_status_t led_task_submit_cmd(
     if (NULL == s_led_cmd_queue)
     {
         return TASK_ERROR_RESOURCE;
+    }
+
+    if (LED_TASK_BEEPING < beep_mode)
+    {
+        return TASK_ERROR_PARAMETER;
     }
 
     led_task_cmd_t cmd = {.enabled = true};
@@ -363,6 +377,7 @@ task_status_t led_task_submit_cmd(
 
         cmd.led_mode[index] = led_mode[index];
     }
+    cmd.beep_mode = beep_mode;
 
     if (pdPASS != xQueueOverwrite(s_led_cmd_queue, &cmd))
     {
@@ -372,8 +387,7 @@ task_status_t led_task_submit_cmd(
     return TASK_OK;
 }
 
-task_status_t led_task_release_remote_control(void)
-{
+task_status_t led_task_release_remote_control(void){
     if (NULL == s_led_cmd_queue)
     {
         return TASK_ERROR_RESOURCE;
@@ -388,26 +402,22 @@ task_status_t led_task_release_remote_control(void)
     return TASK_OK;
 }
 
-uint8_t led_task_get_system_state(void)
-{
+uint8_t led_task_get_system_state(void){
     return s_system_state;
 }
 
 
-void led_task_on_short_press(void)
-{
-    led_task_request_action(LED_ACTION_SHORT_PRESS);
+void led_task_on_short_press(void){
+    led_task_notify_action(LED_TASK_NOTIFY_SHORT_PRESS);
 }/**这三个函数  分别对应短按 长按 双击按键
 led申请 */
 
-void led_task_on_long_press(void)
-{
-    led_task_request_action(LED_ACTION_LONG_PRESS);
+void led_task_on_long_press(void){
+    led_task_notify_action(LED_TASK_NOTIFY_LONG_PRESS);
 }
 
-void led_task_on_double_click(void)
-{
-    led_task_request_action(LED_ACTION_DOUBLE_CLICK);
+void led_task_on_double_click(void){
+    led_task_notify_action(LED_TASK_NOTIFY_DOUBLE_CLICK);
 }
 
 void led_task_entry(void *argument){
@@ -463,23 +473,30 @@ void led_task_entry(void *argument){
                                         REMOTE_BLINK_HALF_PERIOD_MS);
                 led_status = led_task_show_remote_cmd(&remote_cmd,
                                                       remote_blink_on);// 显示远程cmd设置的LED颜色
+                beep_status = led_task_apply_remote_beep(
+                    remote_cmd.beep_mode);
             }
             else
             {
                 led_status = led_task_show_state(
                     COLOR_GREEN,
                     collecting ? COLOR_BLUE : COLOR_OFF);// 显示本地cmd设置的LED颜色  绿色 没采集 blueoff
+                beep_status = bsp_beep_driver_set(false);
             }
 
             if (HANDLER_OK != led_status)
             {
                 led_task_show_fault();
             }
+            if (BEEP_DRIVER_OK != beep_status)
+            {
+                led_task_show_fault();
+            }
         }
 
-        const uint32_t actions = led_task_take_pending_actions();
+        const uint32_t actions = led_task_take_notified_actions();
 
-        if (0U != (actions & LED_ACTION_SHORT_PRESS))// 短按按键
+        if (0U != (actions & LED_TASK_NOTIFY_SHORT_PRESS))// 短按按键
         {
             if (!collecting)
             {// 空闲状态 切换到采集状态
@@ -531,7 +548,7 @@ void led_task_entry(void *argument){
             }
         }
 
-        if (0U != (actions & LED_ACTION_LONG_PRESS))
+        if (0U != (actions & LED_TASK_NOTIFY_LONG_PRESS))
         {// 长按按键
             if (!remote_active)
             {
@@ -552,7 +569,7 @@ void led_task_entry(void *argument){
             }
         }
 
-        if (0U != (actions & LED_ACTION_DOUBLE_CLICK))
+        if (0U != (actions & LED_TASK_NOTIFY_DOUBLE_CLICK))
         {// 双击按键
             for (uint8_t count = 0U; count < 2U; ++count)
             {

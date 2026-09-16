@@ -2,7 +2,8 @@
  * @file led_cmd_type_support.c
  * @brief common_msgs/msg/LedCmd的micro XRCE-DDS CDR类型支持。
  * @details 本文件等价于rosidl_typesupport_microxrcedds_c针对
- *          `std_msgs/Header header + uint8[6] led_mode`生成的核心代码。
+ *          `std_msgs/Header header + uint8[6] led_mode + uint8 beep_mode`
+ *          生成的核心代码。
  */
 #include "common_msgs/msg/led_cmd.h"
 
@@ -48,9 +49,14 @@ static bool led_cmd_cdr_serialize(const void *untyped_ros_message,
         return false;
     }
 
-    return ucdr_serialize_array_uint8_t(cdr,
-                                        message->led_mode,
-                                        LED_CMD_MODE_COUNT);
+    if (!ucdr_serialize_array_uint8_t(cdr,
+                                      message->led_mode,
+                                      LED_CMD_MODE_COUNT))
+    {
+        return false;
+    }
+
+    return ucdr_serialize_uint8_t(cdr, message->beep_mode);
 }
 
 /** @brief 从CDR反序列化LedCmd。 */
@@ -72,9 +78,14 @@ static bool led_cmd_cdr_deserialize(ucdrBuffer *cdr,
         return false;
     }
 
-    return ucdr_deserialize_array_uint8_t(cdr,
-                                          message->led_mode,
-                                          LED_CMD_MODE_COUNT);
+    if (!ucdr_deserialize_array_uint8_t(cdr,
+                                        message->led_mode,
+                                        LED_CMD_MODE_COUNT))
+    {
+        return false;
+    }
+
+    return ucdr_deserialize_uint8_t(cdr, &message->beep_mode);
 }
 
 size_t get_serialized_size_common_msgs__msg__LedCmd(
@@ -88,6 +99,7 @@ size_t get_serialized_size_common_msgs__msg__LedCmd(
     current_alignment += get_serialized_size_std_msgs__msg__Header(
         &message->header, current_alignment);
     current_alignment += LED_CMD_MODE_COUNT;
+    current_alignment += sizeof(message->beep_mode);
 
     return current_alignment - initial_alignment;
 }
@@ -101,6 +113,7 @@ size_t max_serialized_size_common_msgs__msg__LedCmd(
     current_alignment += max_serialized_size_std_msgs__msg__Header(
         full_bounded, current_alignment);
     current_alignment += LED_CMD_MODE_COUNT;
+    current_alignment += sizeof(uint8_t);
 
     return current_alignment - initial_alignment;
 }

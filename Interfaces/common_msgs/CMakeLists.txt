@@ -6,7 +6,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
-    "msg/ButtonEvent.msg"
+    "msg/KeyState.msg"
     "msg/MCUStatus.msg"
     "msg/LedCmd.msg"
     "srv/DeviceSynchronization.srv"

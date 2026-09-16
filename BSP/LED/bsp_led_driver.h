@@ -17,6 +17,26 @@ extern "C" {
 /** @brief 原理图中串联的 SK6805 灯珠总数。 */
 #define BSP_LED_PIXEL_COUNT 6U
 
+/** @brief SK6805协议与TIM3 PWM DMA帧参数。 */
+/** @brief 每颗灯固定为G、R、B三个数据字节。 */
+#define SK6805_BYTES_PER_PIXEL       3U
+/** @brief 一个字节包含八个数据位。 */
+#define SK6805_BITS_PER_BYTE         8U
+/** @brief 六颗灯一帧的数据码元数：6 * 3 * 8 = 144。 */
+#define SK6805_DATA_SLOT_COUNT       \
+    (BSP_LED_PIXEL_COUNT * SK6805_BYTES_PER_PIXEL * SK6805_BITS_PER_BYTE)
+/** @brief 170 MHz下逻辑0的300 ns高电平计数值。 */
+#define SK6805_PWM_ZERO_TICKS        51U
+/** @brief 170 MHz下逻辑1的900 ns高电平计数值。 */
+#define SK6805_PWM_ONE_TICKS         153U
+/** @brief 256个零占空比周期提供不小于300 us的复位低电平。 */
+#define SK6805_RESET_SLOT_COUNT      256U
+/** @brief DMA帧由复位低电平和144个数据码元组成。 */
+#define SK6805_DMA_SLOT_COUNT        \
+    (SK6805_RESET_SLOT_COUNT + SK6805_DATA_SLOT_COUNT)
+/** @brief PWM DMA传输完成等待超时，单位ms。 */
+#define SK6805_TRANSFER_TIMEOUT_MS   5U
+
 /** @brief RGB 颜色；三个亮度分量的有效范围均为 0~255。 */
 typedef struct
 {

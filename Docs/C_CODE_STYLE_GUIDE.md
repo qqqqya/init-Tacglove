@@ -42,9 +42,35 @@ Tasks/user_led_task.c  不采用
 - Handler文件：`bsp_<device>_handler.c/.h`；
 - Task文件：`<device>_task.c/.h`；
 - 任务注册：`task_manager.c/.h`；
-- 公共状态：`task_status.h`。
+- 任务公共状态、任务栈、优先级和任务句柄：`task_manager.h`。
 
 函数使用小写下划线命名，公开函数带模块前缀，文件内部静态函数只保留必要的模块语义。
+
+### 3.1 头文件集中定义规则
+
+为了便于跨文件查找和统一修改，本工程自写的 `Tasks`、`BSP` 模块遵守以下规则：
+
+- 模块配置宏、时间参数、数组长度、状态枚举、命令枚举和公共结构体写在对应 `.h`；
+- 同一模块的 `.c` 不再重复定义这些宏；
+- Task层统一返回状态 `task_status_t` 写在 `Tasks/task_manager.h`，不再单独维护 `task_status.h`；
+- LED任务时序和通知位写在 `Tasks/led_task.h`；
+- SK6805协议及PWM DMA参数写在 `BSP/LED/bsp_led_driver.h`；
+- 按键消抖、长按和双击时间写在 `BSP/KEY/bsp_key_handler.h`；
+- micro-ROS的Domain ID、Topic、Service及连接参数写在 `Tasks/micro_ros_task.h`；
+- 确需跨文件访问的全局对象在 `.h` 中使用 `extern`声明，并且只在一个 `.c` 中定义存储；全局对象使用 `g_`前缀；
+- 只在当前 `.c` 使用的运行状态、缓存和辅助对象仍使用 `static`留在 `.c`，不得仅为“方便访问”而暴露内部可写变量；外部访问应优先提供模块函数；
+- 头文件只放声明和定义信息，不能在头文件中直接定义普通全局变量，否则多个 `.c` 包含后会产生重复定义；
+- CubeMX生成文件、第三方库和自动生成的micro-ROS文件保持原格式，不执行此类搬移。
+
+示例：
+
+```c
+/* task_manager.h */
+extern TaskHandle_t g_led_task_handle;
+
+/* task_manager.c：全工程只能有一个定义 */
+TaskHandle_t g_led_task_handle;
+```
 
 ## 4. 返回值规范
 
@@ -138,13 +164,23 @@ if (TASK_OK != result)
 }
 ```
 
-任务入口必须符合FreeRTOS要求的函数原型：
+任务入口必须符合FreeRTOS要求的函数原型，并使用函数左大括号同行格式：
 
 ```c
-static void led_task_entry(void *argument)
+void led_task_entry(void *argument){
+    /* Task body. */
+}
 ```
 
 `argument`是FreeRTOS预留的任务参数。当前创建任务时传入 `NULL`，所以任务中不使用它。以前的 `(void)argument;` 只用于抑制“未使用参数”编译警告，没有业务功能和运行效果；当前编译选项不会因此报错，已按约定删除。以后任务需要配置参数时，应通过该指针传入结构体并检查空指针。
+
+任务间通信按载荷选择：
+
+- 只有一个接收任务、需要传递事件位且允许同类事件合并时，优先使用Task Notification的 `eSetBits`；
+- 需要保存多条事件、传递结构体或保持发生顺序时使用Queue；
+- 不允许用普通全局 `volatile`位图加临界区重复实现Task Notification；
+- Task Notification发送方必须持有有效 `TaskHandle_t`，接收方使用 `xTaskNotifyWait()`读取并清除已处理位；
+- ISR发送通知必须使用对应的 `FromISR` API，并按FreeRTOS要求执行必要的任务切换。
 
 任务内的周期等待使用 `vTaskDelay()` 或 `vTaskDelayUntil()`，不使用 `HAL_Delay()`。故障任务不能通过关闭全局中断冻结整个系统。
 
@@ -189,6 +225,22 @@ static void led_task_entry(void *argument)
 - 错误分支使用大括号；
 - 比较状态时把常量写在左侧，例如 `TASK_OK != result`；
 - 不覆盖开发者后续已经调整的业务参数、灯效顺序和板级映射。
+
+函数定义的第一个左大括号必须跟在函数声明结尾的同一行，便于IDE折叠后仍能看到完整函数名：
+
+```c
+void func(void){
+}
+
+static task_status_t module_process(
+    const uint8_t *data,
+    uint32_t size){
+}
+```
+
+`if`、`for`、`while`和 `switch`等控制语句继续使用当前工程的换行大括号格式。函数调用不是函数定义，不在调用末尾添加大括号。新增或修改函数必须使用上述格式；旧文件在功能修改时逐步统一，禁止为了纯格式一次性改写CubeMX、第三方库或自动生成代码。
+
+开发者已经写入的解释性注释原则上保留。接口、参数或实际行为改变时，应就地修正已经失真的注释；不能为了格式统一而删除业务背景、调试结论或硬件说明。
 
 ## 10. CMake规范
 

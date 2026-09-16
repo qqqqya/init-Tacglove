@@ -1,0 +1,32 @@
+# STM32G474 Cortex-M4F hard-float toolchain for micro-ROS generate_lib.
+
+set(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_PROCESSOR arm)
+set(CMAKE_CROSSCOMPILING 1)
+set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+set(CMAKE_C_COMPILER arm-none-eabi-gcc)
+set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
+set(CMAKE_AR arm-none-eabi-ar)
+set(CMAKE_RANLIB arm-none-eabi-ranlib)
+
+set(CMAKE_C_COMPILER_WORKS 1 CACHE INTERNAL "")
+set(CMAKE_CXX_COMPILER_WORKS 1 CACHE INTERNAL "")
+
+set(MICRO_ROS_TARGET_FLAGS
+    "-O2 -ffunction-sections -fdata-sections -fno-unwind-tables -fno-asynchronous-unwind-tables -mcpu=cortex-m4 -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -nostdlib"
+    CACHE STRING "STM32G474 micro-ROS target flags" FORCE)
+
+set(CMAKE_C_FLAGS_INIT
+    "-std=c11 ${MICRO_ROS_TARGET_FLAGS} -DCLOCK_MONOTONIC=0 -DRCUTILS_LOG_MIN_SEVERITY=RCUTILS_LOG_MIN_SEVERITY_NONE"
+    CACHE STRING "" FORCE)
+set(CMAKE_CXX_FLAGS_INIT
+    "-std=c++14 ${MICRO_ROS_TARGET_FLAGS} -fno-exceptions -fno-rtti -DCLOCK_MONOTONIC=0 -DRCUTILS_LOG_MIN_SEVERITY=RCUTILS_LOG_MIN_SEVERITY_NONE"
+    CACHE STRING "" FORCE)
+
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
+
+set(__BIG_ENDIAN__ 0)
