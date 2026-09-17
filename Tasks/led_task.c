@@ -20,10 +20,13 @@
 static const bsp_led_color_t COLOR_OFF = {0U, 0U, 0U};
 static const bsp_led_color_t COLOR_GREEN = {0U, LED_BRIGHTNESS, 0U};
 static const bsp_led_color_t COLOR_RED = {LED_BRIGHTNESS, 0U, 0U};
-static const bsp_led_color_t COLOR_BLUE = {LED_BRIGHTNESS, 0U, LED_BRIGHTNESS};
+static const bsp_led_color_t COLOR_BLUE = {0U, 0U, LED_BRIGHTNESS};
 
 // static const bsp_led_color_t COLOR_PURPLE = {LED_BRIGHTNESS, 0U, LED_BRIGHTNESS};
 
+/**
+ * @brief led数组设置详情 beep状态模式 LED任务命令结构体。
+ */
 typedef struct
 {
     bool enabled;
@@ -302,7 +305,7 @@ static uint32_t led_task_take_notified_actions(void){
     (void)xTaskNotifyWait(0U,
                           LED_TASK_NOTIFY_ALL,
                           &actions,
-                          0U);
+                          0U);//阻塞等待通知 等待按键任务发送通知
     return actions;
 }
 
@@ -349,7 +352,7 @@ task_status_t led_task_resources_init(void){
     return TASK_OK;
 }
 
-task_status_t led_task_submit_cmd(
+task_status_t led_task_submit_cmd(//提交一帧由PC下发的六灯和蜂鸣器模式。
     const uint8_t led_mode[LED_TASK_LED_COUNT],
     uint8_t beep_mode){
     if (NULL == led_mode)
@@ -387,14 +390,14 @@ task_status_t led_task_submit_cmd(
     return TASK_OK;
 }
 
-task_status_t led_task_release_remote_control(void){
+task_status_t led_task_release_remote_control(void){//释放PC远程灯光控制并恢复本地按键状态显示。
     if (NULL == s_led_cmd_queue)
     {
         return TASK_ERROR_RESOURCE;
     }
 
     const led_task_cmd_t cmd = {.enabled = false};
-    if (pdPASS != xQueueOverwrite(s_led_cmd_queue, &cmd))
+    if (pdPASS != xQueueOverwrite(s_led_cmd_queue, &cmd))//将邮箱中的数据覆盖为cmd
     {
         return TASK_ERROR;
     }
@@ -409,7 +412,7 @@ uint8_t led_task_get_system_state(void){
 
 void led_task_on_short_press(void){
     led_task_notify_action(LED_TASK_NOTIFY_SHORT_PRESS);
-}/**这三个函数  分别对应短按 长按 双击按键
+}/**这三个函数  分别对应短按 长按 双击按键  --001  010  100对应的编码
 led申请 */
 
 void led_task_on_long_press(void){
@@ -465,19 +468,17 @@ void led_task_entry(void *argument){
         { //邮箱中存的led cmd 有数据
             remote_active = received_cmd.enabled;
             if (remote_active)
-            {
+            {//有远程cmd  显示远程cmd设置的LED颜色+beep状态
                 remote_cmd = received_cmd;
                 remote_blink_on = true;
-                next_remote_blink = xTaskGetTickCount() +
-                                    pdMS_TO_TICKS(
-                                        REMOTE_BLINK_HALF_PERIOD_MS);
+                next_remote_blink = xTaskGetTickCount() + pdMS_TO_TICKS(REMOTE_BLINK_HALF_PERIOD_MS);
                 led_status = led_task_show_remote_cmd(&remote_cmd,
                                                       remote_blink_on);// 显示远程cmd设置的LED颜色
                 beep_status = led_task_apply_remote_beep(
                     remote_cmd.beep_mode);
             }
             else
-            {
+            {//没有远程cmd  显示本地cmd设置的LED颜色+beep状态
                 led_status = led_task_show_state(
                     COLOR_GREEN,
                     collecting ? COLOR_BLUE : COLOR_OFF);// 显示本地cmd设置的LED颜色  绿色 没采集 blueoff
@@ -494,16 +495,17 @@ void led_task_entry(void *argument){
             }
         }
 
+        /** 根据按键事件进行LED操作 */
         const uint32_t actions = led_task_take_notified_actions();
 
-        if (0U != (actions & LED_TASK_NOTIFY_SHORT_PRESS))// 短按按键
+        if (0U != (actions & LED_TASK_NOTIFY_SHORT_PRESS))// 短按按键  和001相与
         {
             if (!collecting)
             {// 空闲状态 切换到采集状态
                 s_system_state = LED_TASK_SYSTEM_PREPARING;
 
-                if (!remote_active)
-                {//没有远程cmd 正常的采集LED颜色 即led7闪烁
+                if (!remote_active)//没有远程cmd 正常的采集LED颜色 即led7闪烁  如果有的话跟随远程cmd
+                {
                     led_status = led_task_run_prepare();
                     if (HANDLER_OK != led_status)
                     {
@@ -517,7 +519,7 @@ void led_task_entry(void *argument){
                     led_task_show_fault();
                 }
 
-                if (!remote_active)
+                if (!remote_active)//没有远程cmd的话  系统灯led7 常亮蓝色     如果有的话跟随远程cmd
                 {//led7常亮蓝色 其他led常亮绿色
                     led_status = led_task_show_state(COLOR_GREEN,
                                                      COLOR_BLUE);
@@ -534,7 +536,7 @@ void led_task_entry(void *argument){
                     led_task_show_fault();
                 }
 
-                if (!remote_active)
+                if (!remote_active)//没有远程cmd的话  系统灯led7 off     如果有的话跟随远程cmd
                 {//led7 off 其他led常亮蓝色
                     led_status = led_task_show_state(COLOR_GREEN, COLOR_OFF);
                 }

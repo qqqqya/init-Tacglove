@@ -14,13 +14,13 @@
 TaskHandle_t g_led_task_handle;
 
 task_status_t task_manager_init(void){
-    /* 初始化LED key等 存储cmd的队列/邮箱 */
+    /* 初始化LED存储cmd的邮箱 */
     task_status_t status = led_task_resources_init();
     if (TASK_OK != status)
     {
         return status;
     }
-
+    /*创建key的队列等*/
     status = micro_ros_task_resources_init();
     if (TASK_OK != status)
     {

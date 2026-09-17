@@ -24,21 +24,22 @@ void key_task_entry(void *argument){
 
     for (;;)
     {
-        status = bsp_key_handler_process();
+        status = bsp_key_handler_process(); //读取PA0并向前推进一次按键状态机。状态改为单击 双击 长按
+                                            //包含事件KEY_EVENT更新；KEY_STATE
         if (KEY_HANDLER_OK != status)
         {
             vTaskSuspend(NULL);
         }
 
         key_event_t event = KEY_EVENT_NONE;
-        status = bsp_key_handler_get_event(&event);
+        status = bsp_key_handler_get_event(&event); //获取当前按键事件 key_handler_process中更新的s_key.event
         if (KEY_HANDLER_OK != status)
         {
             vTaskSuspend(NULL);
         }
 
         switch (event)
-        {
+        {   //根据按键事件分发LED动作
             case KEY_EVENT_SHORT_PRESS:
                 led_task_on_short_press();
                 break;
@@ -57,9 +58,9 @@ void key_task_entry(void *argument){
         }
 
         if (KEY_EVENT_NONE != event)
-        {
-            /* Agent断线或Queue满时只丢弃ROS上报，本地灯和蜂鸣器动作不受影响。 */
-            (void)micro_ros_task_enqueue_key_event((uint8_t)event);
+        {//按键事件有更新--进行上报（ROS连接情况下）
+            /* Agent断线或Queue满时只丢弃ROS上报，本地灯和蜂鸣器动作不受影响 ---from ros task */
+            (void)micro_ros_task_enqueue_key_event((uint8_t)event);//将已识别的按键事件送入micro-ROS发布Queue。
 
             status = bsp_key_handler_clear_event();
             if (KEY_HANDLER_OK != status)

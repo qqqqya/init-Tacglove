@@ -4,6 +4,6 @@ D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/LED/bsp_led_driver.c:69:26:sk6805_
 D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/LED/bsp_led_driver.c:80:21:bsp_led_driver_init	8	static
 D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/LED/bsp_led_driver.c:100:21:bsp_led_driver_set_pixel	16	static
 D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/LED/bsp_led_driver.c:114:6:bsp_led_driver_clear	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/LED/bsp_led_driver.c:123:21:bsp_led_driver_commit	32	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/LED/bsp_led_driver.c:123:21:bsp_led_driver_commit	32	static,ignoring_inline_asm
 D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/LED/bsp_led_driver.c:186:6:HAL_TIM_PWM_PulseFinishedCallback	16	static
 D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/LED/bsp_led_driver.c:198:6:HAL_TIM_ErrorCallback	16	static

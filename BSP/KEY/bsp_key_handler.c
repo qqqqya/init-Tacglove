@@ -11,13 +11,13 @@
 
 typedef struct
 {
-    key_state_t state;
-    key_event_t event;
-    uint32_t state_start_tick;
-    uint32_t press_start_tick;
-    uint32_t secondary_start_tick;
-    bool secondary_timing;
-    bool has_triggered;
+    key_state_t state;              //当前按键状态
+    key_event_t event;              //当前按键事件
+    uint32_t state_start_tick;      //当前状态开始时间
+    uint32_t press_start_tick;      //按键按下开始时间
+    uint32_t secondary_start_tick;  //双击或松开消抖开始时间
+    bool secondary_timing;          //是否正在进行辅助计时
+    bool has_triggered;             //是否触发事件
 } key_control_t;
 
 static bool s_key_initialized;
@@ -72,7 +72,7 @@ key_handler_status_t bsp_key_handler_process(void){
     const uint32_t current_tick = HAL_GetTick();
 
     switch (s_key.state)
-    {
+    {//根据当前状态更新按键事件---空闲  去抖-按下消抖 松开消抖---  长按  等待双击
         case KEY_STATE_IDLE:
             s_key.has_triggered = false;
             s_key.secondary_timing = false;
@@ -83,7 +83,7 @@ key_handler_status_t bsp_key_handler_process(void){
             }
             break;
 
-        case KEY_STATE_DEBOUNCE_PRESS:
+        case KEY_STATE_DEBOUNCE_PRESS://按下消抖
             if (!is_pressed)
             {
                 s_key.state = KEY_STATE_IDLE;
@@ -99,7 +99,7 @@ key_handler_status_t bsp_key_handler_process(void){
             }
             break;
 
-        case KEY_STATE_HOLD:
+        case KEY_STATE_HOLD://已确认按下，监测长按或松开
             if (is_pressed)
             {
                 if (key_time_reached(current_tick,
@@ -108,7 +108,7 @@ key_handler_status_t bsp_key_handler_process(void){
                     !s_key.has_triggered)
                 {
                     /* 持续按下达到门限后立即上报一次长按事件。 */
-                    s_key.event = KEY_EVENT_LONG_PRESS;
+                    s_key.event = KEY_EVENT_LONG_PRESS;                         //事件长按发生
                     s_key.has_triggered = true;
                 }
             }
@@ -119,7 +119,7 @@ key_handler_status_t bsp_key_handler_process(void){
             }
             break;
 
-        case KEY_STATE_DEBOUNCE_RELEASE:
+        case KEY_STATE_DEBOUNCE_RELEASE://松开消抖
             if (is_pressed)
             {
                 s_key.state = KEY_STATE_HOLD;
@@ -159,15 +159,14 @@ key_handler_status_t bsp_key_handler_process(void){
                     s_key.event = KEY_EVENT_DOUBLE_CLICK;
                     s_key.has_triggered = true;
                     s_key.state = KEY_STATE_DOUBLE_DONE;
-                    s_key.secondary_timing = false;
+                    s_key.secondary_timing = false;         //双击窗口结束，重置辅助计时
                 }
             }
             else
-            {
+            {//单击窗口超时且没有第二次按下，单击成立
                 s_key.secondary_timing = false;
-                if (key_time_reached(current_tick,
-                                     s_key.state_start_tick,
-                                     KEY_DOUBLE_CLICK_TIME_MS) &&
+                if (key_time_reached(current_tick,s_key.state_start_tick,KEY_DOUBLE_CLICK_TIME_MS) 
+                        &&
                     !s_key.has_triggered)
                 {
                     /* 双击窗口超时且没有第二次按下，单击成立。 */
@@ -177,7 +176,7 @@ key_handler_status_t bsp_key_handler_process(void){
             }
             break;
 
-        case KEY_STATE_DOUBLE_DONE:
+        case KEY_STATE_DOUBLE_DONE://双击成立后等待第二次松开。
             if (is_pressed)
             {
                 s_key.secondary_timing = false;

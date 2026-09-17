@@ -30,19 +30,19 @@
 #include "rmw_microros/rmw_microros.h"
 
 static QueueHandle_t s_key_event_queue;
-static volatile bool s_agent_connected;
-static uint32_t s_message_tx_count;
-static uint32_t s_message_rx_count;
-static uint32_t s_key_drop_count;
+static volatile bool s_agent_connected;     // 是否已连接到agent
+static uint32_t s_message_tx_count;         // 发送的消息计数
+static uint32_t s_message_rx_count;         // 接收的消息计数
+static uint32_t s_key_drop_count;           // 按键事件丢弃计数
 
-static rcl_allocator_t s_allocator;
+static rcl_allocator_t s_allocator;         // ROS allocator
 static rclc_support_t s_support;
 static rcl_node_t s_node;
 static rcl_publisher_t s_key_state_pub;
-static rcl_publisher_t s_mcu_status_pub;
-static rcl_subscription_t s_led_cmd_sub;
-static rcl_client_t s_sync_client;
-static rclc_executor_t s_executor;
+static rcl_publisher_t s_mcu_status_pub;    
+static rcl_subscription_t s_led_cmd_sub;    
+static rcl_client_t s_sync_client;          
+static rclc_executor_t s_executor;          // ROS executor
 static micro_ros_entity_flags_t s_entity_flags;
 
 static common_msgs__msg__KeyState s_key_state_msg;
@@ -65,6 +65,7 @@ static TickType_t s_sync_request_tick;
 
 /** @brief 将ROS消息对象绑定到全部静态字符串缓冲区。 */
 static void micro_ros_init_messages(void){
+    
     memset(&s_key_state_msg, 0, sizeof(s_key_state_msg));
     s_key_state_msg.header.frame_id.data = s_key_frame_id;
     s_key_state_msg.header.frame_id.size = strlen(s_key_frame_id);
@@ -84,7 +85,7 @@ static void micro_ros_init_messages(void){
     s_led_cmd_msg.header.frame_id.capacity = sizeof(s_led_cmd_frame_buffer);
 
     memset(&s_sync_request, 0, sizeof(s_sync_request));
-    s_sync_request.sync_request = true;
+    s_sync_request.sync_request = true;// 请求同步
 
     memset(&s_sync_response, 0, sizeof(s_sync_response));
     s_sync_response.header.frame_id.data = s_sync_frame_buffer;
@@ -97,14 +98,15 @@ static void micro_ros_init_messages(void){
  */
 static bool micro_ros_init_allocator(void){
     rcutils_allocator_t allocator = rcutils_get_zero_initialized_allocator();
-    allocator.allocate = microros_allocate;
-    allocator.deallocate = microros_deallocate;
-    allocator.reallocate = microros_reallocate;
-    allocator.zero_allocate = microros_zero_allocate;
+    allocator.allocate = microros_allocate;             // ← 自定义的 malloc
+    allocator.deallocate = microros_deallocate;         // ← 自定义的 free
+    allocator.reallocate = microros_reallocate;         // ← 自定义的 realloc    
+    allocator.zero_allocate = microros_zero_allocate;   // ← 自定义的 calloc    
     allocator.state = NULL;
 
     return rcutils_set_default_allocator(&allocator);
 }
+
 
 /** @brief 将全部rcl句柄恢复为可重新初始化的零状态。 */
 static void micro_ros_zero_entities(void){
@@ -172,7 +174,7 @@ static void micro_ros_led_cmd_callback(const void *message){
         return;
     }
 
-    ++s_message_rx_count;
+    ++s_message_rx_count;   //回调的时候执行ledtask中的submit--写入任务邮箱
     (void)led_task_submit_cmd(led_cmd->led_mode, led_cmd->beep_mode);
 }
 
@@ -181,12 +183,12 @@ static void micro_ros_sync_callback(const void *message){
     const common_msgs__srv__DeviceSynchronization_Response *response =
         (const common_msgs__srv__DeviceSynchronization_Response *)message;
 
-    s_sync_pending = false;
-    if ((NULL == response) || !response->sync_state)
+    s_sync_pending = false;                             // 无论成功与否，取消 pending 状态
+    if ((NULL == response) || !response->sync_state)    // ← 检查 response 是否有效
     {
-        return;
+        return;                                 // response 为空或 sync_state=false
     }
-
+    // 到这里说明成功，进行时间基准换算
     const int64_t response_ns =
         (int64_t)response->header.stamp.sec * 1000000000LL +
         response->header.stamp.nanosec;
@@ -203,27 +205,21 @@ static void micro_ros_sync_callback(const void *message){
  */
 static task_status_t micro_ros_create_entities(void){
     micro_ros_zero_entities();
-    s_allocator = rcl_get_default_allocator();
 
-    rcl_init_options_t init_options =
-        rcl_get_zero_initialized_init_options();
+    // Allocator + Domain ID
+    s_allocator = rcl_get_default_allocator();              //获取已注册的分配器
+    rcl_init_options_t init_options = rcl_get_zero_initialized_init_options();//用该分配器初始化配置
     rcl_ret_t result = rcl_init_options_init(&init_options, s_allocator);
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
-
-    result = rcl_init_options_set_domain_id(&init_options,
-                                            MICRO_ROS_DOMAIN_ID);
-    if (RCL_RET_OK != result)
-    {
-        const rcl_ret_t fini_result =
-            rcl_init_options_fini(&init_options);
-        (void)fini_result;
+    result = rcl_init_options_set_domain_id(&init_options,MICRO_ROS_DOMAIN_ID);//设置域ID
+    if (RCL_RET_OK != result){
+        const rcl_ret_t fini_result = rcl_init_options_fini(&init_options);
+        (void)fini_result; //ignore ret
         return TASK_ERROR;
     }
-
-    result = rclc_support_init_with_options(&s_support,
+    result = rclc_support_init_with_options(&s_support,         //初始化支持support
                                             0,
                                             NULL,
                                             &init_options,
@@ -231,22 +227,24 @@ static task_status_t micro_ros_create_entities(void){
     const rcl_ret_t init_options_fini_result =
         rcl_init_options_fini(&init_options);
     (void)init_options_fini_result;
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
     s_entity_flags.support = true;
 
+    
+    // 创建节点
     result = rclc_node_init_default(&s_node,
                                     MICRO_ROS_NODE_NAME,
                                     "",
                                     &s_support);
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
     s_entity_flags.node = true;
 
+
+    // 创建按键state publisher
     const rosidl_message_type_support_t *key_state_type_support =
         ROSIDL_TYPESUPPORT_INTERFACE__MESSAGE_SYMBOL_NAME(
             rosidl_typesupport_microxrcedds_c,
@@ -257,23 +255,23 @@ static task_status_t micro_ros_create_entities(void){
                                          &s_node,
                                          key_state_type_support,
                                          MICRO_ROS_KEY_TOPIC);
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
     s_entity_flags.key_pub = true;
 
+    // 创建MCU status publisher
     result = rclc_publisher_init_default(
         &s_mcu_status_pub,
         &s_node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(common_msgs, msg, MCUStatus),
         MICRO_ROS_STATUS_TOPIC);
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
     s_entity_flags.status_pub = true;
 
+    // 创建LED cmd sub
     const rosidl_message_type_support_t *led_cmd_type_support =
         ROSIDL_TYPESUPPORT_INTERFACE__MESSAGE_SYMBOL_NAME(
             rosidl_typesupport_microxrcedds_c,
@@ -290,25 +288,23 @@ static task_status_t micro_ros_create_entities(void){
     }
     s_entity_flags.led_cmd_sub = true;
 
+    // 创建同步服务客户端---mcu client
     result = rclc_client_init_default(
         &s_sync_client,
         &s_node,
-        ROSIDL_GET_SRV_TYPE_SUPPORT(common_msgs,
-                                    srv,
-                                    DeviceSynchronization),
+        ROSIDL_GET_SRV_TYPE_SUPPORT(common_msgs, srv,DeviceSynchronization),
         MICRO_ROS_SYNC_SERVICE);
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
     s_entity_flags.sync_client = true;
 
-    result = rclc_executor_init(&s_executor,
+    // 创建ROS executor
+    result = rclc_executor_init(&s_executor,        //初始化ROS executor
                                 &s_support.context,
                                 MICRO_ROS_EXECUTOR_HANDLES,
                                 &s_allocator);
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
     s_entity_flags.executor = true;
@@ -318,17 +314,15 @@ static task_status_t micro_ros_create_entities(void){
                                             &s_led_cmd_msg,
                                             micro_ros_led_cmd_callback,
                                             ON_NEW_DATA);
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
 
-    result = rclc_executor_add_client(&s_executor,
+    result = rclc_executor_add_client(&s_executor,              //这里的 client是相对于server的 是同步服务客户端
                                       &s_sync_client,
                                       &s_sync_response,
                                       micro_ros_sync_callback);
-    if (RCL_RET_OK != result)
-    {
+    if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
 
@@ -464,7 +458,7 @@ task_status_t micro_ros_task_resources_init(void){
     return TASK_OK;
 }
 
-task_status_t micro_ros_task_enqueue_key_event(uint8_t event_type){
+task_status_t micro_ros_task_enqueue_key_event(uint8_t event_type){//将已识别的按键事件送入micro-ROS发布Queue。
     if ((common_msgs__msg__KeyState__EVENT_LONG_PRESS > event_type) ||
         (common_msgs__msg__KeyState__EVENT_ERROR_ACK < event_type))
     {
@@ -476,7 +470,7 @@ task_status_t micro_ros_task_enqueue_key_event(uint8_t event_type){
         return TASK_ERROR_RESOURCE;
     }
 
-    if (pdPASS != xQueueSendToBack(s_key_event_queue,
+    if (pdPASS != xQueueSendToBack(s_key_event_queue,   //添加按键事件到队列尾部
                                    &event_type,
                                    0U))
     {
@@ -496,7 +490,7 @@ void micro_ros_task_entry(void *argument){
     micro_ros_init_messages();//ROS消息对象绑定到全部静态字符串缓冲区
     micro_ros_zero_entities();//初始化ROS实体
 
-    if (RMW_RET_OK != rmw_uros_set_custom_transport(
+    if (RMW_RET_OK != rmw_uros_set_custom_transport(//handheld代码里面这个是在 micro_ros_init 中包含着的
                           true,
                           &huart2,
                           cubemx_transport_open,
@@ -519,9 +513,10 @@ void micro_ros_task_entry(void *argument){
             s_agent_connected = false;  //若没有连接到Agent，重置连接状态
             if (RMW_RET_OK == rmw_uros_ping_agent(
                                   MICRO_ROS_AGENT_PING_TIMEOUT_MS,
-                                  MICRO_ROS_AGENT_PING_ATTEMPTS))
-            {
-                if (TASK_OK == micro_ros_create_entities())//创建ROS实体Publisher、Subscription和Client
+                                  MICRO_ROS_AGENT_PING_ATTEMPTS))//ping agent 100ms
+            {   // Ping 通 → 创建实体，进入 RUNNING 状态
+                if (TASK_OK == micro_ros_create_entities()) //创建executor
+                                                            //ROS实体Publisher、Subscription和Client
                 {
                     s_agent_connected = true;
                     s_time_synced = false;
@@ -539,18 +534,21 @@ void micro_ros_task_entry(void *argument){
                     micro_ros_fini_entities();//创建失败，释放ROS实体 类似deinit
                 }
             }
-
             vTaskDelay(pdMS_TO_TICKS(MICRO_ROS_AGENT_WAIT_MS));
             continue;
         }
 
+        // ros running 状态下，等待ROS事件发生 --最多5ms等待
         (void)rclc_executor_spin_some(      //等待ROS事件发生 --最多5ms等待
             &s_executor,
             RCL_MS_TO_NS(MICRO_ROS_EXECUTOR_TIMEOUT_MS));
-        micro_ros_publish_key_events();
+            
+        //发布Queue中当前积压的按键动作。    
+        micro_ros_publish_key_events();     
 
+        //时间同步  发送request 
         const TickType_t current_tick = xTaskGetTickCount();
-        micro_ros_process_time_sync(current_tick);
+        micro_ros_process_time_sync(current_tick);//内部send request 相应的  client executor的callback会发送response
 
         if (pdMS_TO_TICKS(MICRO_ROS_STATUS_PERIOD_MS) <=
             (current_tick - last_status_tick))      //每1 s发布一次MCU状态
@@ -559,6 +557,8 @@ void micro_ros_task_entry(void *argument){
             micro_ros_publish_mcu_status();
         }
 
+        // ros running 状态下，每10 s检查一次Agent是否连接
+        // 运行中检查健康状态
         if (pdMS_TO_TICKS(MICRO_ROS_HEALTH_PERIOD_MS) <=
             (current_tick - last_health_tick))
         {
@@ -574,14 +574,15 @@ void micro_ros_task_entry(void *argument){
                 ping_failure_count = 0U;
             }
 
+        // 连续失败达到阈值 → 断开，回到 WAIT_AGENT
             if (MICRO_ROS_AGENT_FAILURE_LIMIT <= ping_failure_count)
             {
                 s_agent_connected = false;
                 s_time_synced = false;
                 s_sync_pending = false;
                 xQueueReset(s_key_event_queue);
-                (void)led_task_release_remote_control();
-                micro_ros_fini_entities();
+                (void)led_task_release_remote_control();//释放PC远程灯光控制并恢复本地按键状态显示。
+                micro_ros_fini_entities();          //清理实体，回到等待状态  释放ROS实体 类似deinit
                 state = MICRO_ROS_STATE_WAIT_AGENT;
             }
         }
