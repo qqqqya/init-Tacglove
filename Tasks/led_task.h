@@ -29,7 +29,7 @@
 #define DOUBLE_FEEDBACK_TIME_MS      100U /**< 双击灯光反馈时间，单位ms。 */
 #define REMOTE_BLINK_HALF_PERIOD_MS  250U /**< 远程闪烁半周期，单位ms。 */
 #define LED_TASK_PERIOD_MS           1U   /**< LED任务周期，单位ms。 */
-#define LED_BRIGHTNESS               2U   /**< LED亮度，有效范围0~255。 */
+#define LED_BRIGHTNESS               10U   /**< LED亮度，有效范围0~255。 */
 
 /** @brief 按键任务通过Task Notification发送给LED任务的动作位。 */
 #define LED_TASK_NOTIFY_SHORT_PRESS  (1UL << 0U)

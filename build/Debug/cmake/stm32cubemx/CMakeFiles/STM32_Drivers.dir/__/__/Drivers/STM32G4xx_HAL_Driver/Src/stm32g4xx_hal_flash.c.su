@@ -10,5 +10,5 @@ D:/InternWork/Code/Test_mygit/Tacapp_init/Drivers/STM32G4xx_HAL_Driver/Src/stm32
 D:/InternWork/Code/Test_mygit/Tacapp_init/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_flash.c:606:19:HAL_FLASH_OB_Launch	8	static
 D:/InternWork/Code/Test_mygit/Tacapp_init/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_flash.c:654:10:HAL_FLASH_GetError	4	static
 D:/InternWork/Code/Test_mygit/Tacapp_init/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_flash.c:678:19:FLASH_WaitForLastOperation	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_flash.c:725:13:FLASH_Program_DoubleWord	24	static,ignoring_inline_asm
-D:/InternWork/Code/Test_mygit/Tacapp_init/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_flash.c:750:13:FLASH_Program_Fast	40	static,ignoring_inline_asm
+D:/InternWork/Code/Test_mygit/Tacapp_init/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_flash.c:725:13:FLASH_Program_DoubleWord	24	static
+D:/InternWork/Code/Test_mygit/Tacapp_init/Drivers/STM32G4xx_HAL_Driver/Src/stm32g4xx_hal_flash.c:750:13:FLASH_Program_Fast	40	static

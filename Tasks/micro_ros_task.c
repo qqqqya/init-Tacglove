@@ -511,8 +511,7 @@ void micro_ros_task_entry(void *argument){
         if (MICRO_ROS_STATE_WAIT_AGENT == state)
         {
             s_agent_connected = false;  //若没有连接到Agent，重置连接状态
-            if (RMW_RET_OK == rmw_uros_ping_agent(
-                                  MICRO_ROS_AGENT_PING_TIMEOUT_MS,
+            if (RMW_RET_OK == rmw_uros_ping_agent(MICRO_ROS_AGENT_PING_TIMEOUT_MS,
                                   MICRO_ROS_AGENT_PING_ATTEMPTS))//ping agent 100ms
             {   // Ping 通 → 创建实体，进入 RUNNING 状态
                 if (TASK_OK == micro_ros_create_entities()) //创建executor
