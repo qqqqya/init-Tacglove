@@ -1,9 +1,0 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:145:28:xEventGroupCreate	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:312:17:xEventGroupWaitBits	32	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:472:17:xEventGroupClearBits	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:524:17:xEventGroupGetBitsFromISR	0	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:547:17:xEventGroupSetBits	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:185:17:xEventGroupSync	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:647:10:vEventGroupDelete	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:745:10:vEventGroupSetBitsCallback	0	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/FreeRTOS/event_groups.c:761:10:vEventGroupClearBitsCallback	0	static

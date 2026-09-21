@@ -1,8 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"D:/InternWork/Code/Test_mygit/Tacapp_init/build/Release/cmake_install.cmake",
-		"D:/InternWork/Code/Test_mygit/Tacapp_init/build/Release/cmake/stm32cubemx/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

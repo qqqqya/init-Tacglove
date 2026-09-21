@@ -18,7 +18,7 @@
 ### 2.1 当前代码链路
 
 ```text
-PA0低电平
+PA11低电平
   → key_task每1 ms调用bsp_key_handler_process()
   → Handler完成消抖、长按/单击/双击识别
   → key_task根据key_event_t分两路处理
@@ -122,7 +122,7 @@ source：Interfaces/common_msgs/msg/KeyState.msg
 
 - PC接口源：`Interfaces/common_msgs/msg/KeyState.msg`；
 - PC生成配置：`Interfaces/common_msgs/CMakeLists.txt`；
-- PC测试程序：`Interfaces/stage3_pc_test.py`；
+- PC测试程序：`cmdfile/stage3_pc_test.py`；
 - MCU结构头：`Middleware/Micro-ROS/include/common_msgs/msg/key_state.h`及detail头；
 - MCU CDR类型支持：`key_state_type_support.c`；
 - MCU Publisher创建和消息对象：`Tasks/micro_ros_task.c`。
@@ -147,7 +147,7 @@ Interfaces/common_msgs/
     └── DeviceSynchronization.srv
 ```
 
-`Interfaces/stage3_pc_test.py`可作为订阅和时间同步Server示例一起提供，但它不是接口定义本身。不要把MCU的 `libmicroros.a`、手工临时类型支持或 `build/`目录交给PC团队作为消息源。
+`cmdfile/stage3_pc_test.py`可作为订阅和时间同步Server示例一起提供，但它不是接口定义本身。不要把MCU的 `libmicroros.a`、手工临时类型支持或 `build/`目录交给PC团队作为消息源。
 
 ### 4.2 通用配置
 
@@ -182,7 +182,7 @@ std_msgs/Header header
 uint8 event_type
 ```
 
-当前板实际产生1、2、3；4为故障确认预留。它表示经过消抖和状态机确认后的离散动作，不是PA0实时高低电平。
+当前板实际产生1、2、3；4为故障确认预留。它表示经过消抖和状态机确认后的离散动作，不是PA11实时高低电平。
 
 ### 4.4 MCU PUB：MCU状态
 

@@ -56,7 +56,7 @@ Agent未启动、USB拔出或同步服务未启动都不会复位MCU。Agent断�
 ### 2.4 按键PUB
 
 ```text
-PA0 → bsp_key_handler → key_task
+PA11 → bsp_key_handler → key_task
                        ├── 原有本地LED/蜂鸣器动作
                        └── 8元素KeyState Queue
                                       ↓
@@ -296,7 +296,7 @@ generated ... with input from common_msgs:msg/KeyState.idl
 | `Interfaces/common_msgs/CMakeLists.txt` | 调用rosidl生成接口代码 | 否 |
 | `Interfaces/common_msgs/msg/*.msg` | PC/MCU共同协议的源定义；当前由PC工作空间直接构建 | 否 |
 | `Interfaces/common_msgs/srv/*.srv` | service共同协议的源定义；当前由PC工作空间直接构建 | 否 |
-| `Interfaces/stage3_pc_test.py` | 订阅两个MCU PUB并提供同步server | 否，只在WSL运行 |
+| `cmdfile/stage3_pc_test.py` | 订阅两个MCU PUB并提供同步server | 否，只在WSL运行 |
 | `micro_ros_agent` | 串口XRCE-DDS到ROS 2/DDS的桥接进程 | 否，只在WSL运行 |
 | `ros2 topic/node/service/interface` | 查看、验证和下发消息 | 否，只在WSL运行 |
 | `usbipd` | 将Windows USB设备attach给WSL | 否，只在Windows运行 |
@@ -331,7 +331,7 @@ Application/Middleware/Micro-ROS/libmicroros.a
 | `Tasks/task_manager.c` | MCU端初始化Queue并直接创建三个任务 |
 | `Middleware/Micro-ROS` | MCU端参考静态库、生成头文件、内存/时间/UART DMA适配 |
 | `Interfaces/common_msgs` | 共同协议源文件及PC端ROS 2接口包 |
-| `Interfaces/stage3_pc_test.py` | PC端状态监听、按键打印和时间同步server |
+| `cmdfile/stage3_pc_test.py` | PC端状态监听、按键打印和时间同步server |
 
 ## 4. 构建结果
 
@@ -345,7 +345,7 @@ RAM中包含FreeRTOS 25 KB heap、micro-ROS 25 KB专用heap、2048字节UART RX 
 生成固件：
 
 - Debug：`build/Debug/glove_UMI_APP.elf/.hex/.bin`；
-- Release：`build/Release/glove_UMI_APP.elf/.hex/.bin`。
+- Release：`Application/build/Release/glove_UMI_APP.elf/.hex/.bin`。
 
 ## 5. PC端接口包构建与逐步检查
 
@@ -548,7 +548,7 @@ cat log/latest_build/common_msgs/stdout_stderr.log
 
 ### 6.1 烧录后先做离线基线
 
-烧录 `build/Release/glove_UMI_APP.bin` 后先不要启动Agent，确认：
+烧录 `Application/build/Release/glove_UMI_APP.bin` 后先不要启动Agent，确认：
 
 1. LED2~LED6完成绿色上电自检并进入绿色常亮；
 2. LED7初始熄灭；
@@ -995,7 +995,7 @@ Agent启动顺序不受限制：可以先启动MCU，也可以先启动Agent，�
 终端B执行共同环境命令后运行：
 
 ```bash
-python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/Interfaces/stage3_pc_test.py
+python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/cmdfile/stage3_pc_test.py
 ```
 
 预期顺序：

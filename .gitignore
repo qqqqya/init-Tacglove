@@ -18,6 +18,14 @@
 *.bin
 *.Bak
 
+# Local CMake build trees generated for the stage-5 Bootloader.
+/Bootloader/build/
+/Application/build/
+/Application/Middleware/Micro-ROS/.backup_before_regeneration/
+/Application/Middleware/Micro-ROS/.generated.*/
+/.codex-build/
+__pycache__/
+
 #Keil Project screen layout file
 *.uvguix.*
 *.uvgui.*
@@ -25,3 +33,7 @@
 #JLINK file
 JLinkLog.txt
 *.dbgconf
+
+
+tmp/
+log/

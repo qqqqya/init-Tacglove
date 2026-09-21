@@ -77,7 +77,7 @@ uint8 event_type
 ### 4.2 发布过程
 
 ```text
-PA0物理电平
+PA11物理电平
     ↓
 bsp_key_handler_process()
     ↓
@@ -95,7 +95,7 @@ KEY_EVENT_LONG_PRESS / SHORT_PRESS / DOUBLE_CLICK
 处理规则：
 
 - key_task继续保持1 ms扫描，不直接调用 `rcl_publish()`；
-- 按键Queue只传已经识别完成的事件，不持续发布PA0高低电平；
+- 按键Queue只传已经识别完成的事件，不持续发布PA11高低电平；
 - `micro_ros_task`从Queue取出事件，填写时间戳后发布；
 - 尚未完成时间同步时，`header.stamp` 置0；
 - Agent未连接时保留本地按键功能，不在重连后补发已经过期的按键事件；
@@ -285,7 +285,7 @@ current_led_cmd
 
 ```text
                          ┌──────────────────────────────┐
-PA0 -> key_task -> Queue -> key_state PUB              │
+PA11 -> key_task -> Queue -> key_state PUB             │
                          │                              │
 系统/连接/计数 ----------> mcu_status PUB               ├── USART2/CH340 -> PC
                          │                              │

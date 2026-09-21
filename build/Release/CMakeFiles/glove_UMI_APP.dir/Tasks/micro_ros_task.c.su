@@ -1,8 +1,0 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/micro_ros_task.c:110:13:micro_ros_zero_entities	160	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/micro_ros_task.c:339:13:micro_ros_fini_entities	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/micro_ros_task.c:180:13:micro_ros_sync_callback	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/micro_ros_task.c:151:13:micro_ros_fill_stamp.part.0	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/micro_ros_task.c:167:13:micro_ros_led_cmd_callback	0	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/micro_ros_task.c:450:15:micro_ros_task_resources_init	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/micro_ros_task.c:467:15:micro_ros_task_enqueue_key_event	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Tasks/micro_ros_task.c:490:6:micro_ros_task_entry	96	static

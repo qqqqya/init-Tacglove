@@ -1,7 +1,0 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/key_state_type_support.c:71:8:get_serialized_size_common_msgs__msg__KeyState	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/key_state_type_support.c:98:17:key_state_get_serialized_size	0	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/key_state_type_support.c:30:13:key_state_cdr_serialize	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/key_state_type_support.c:51:13:key_state_cdr_deserialize	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/key_state_type_support.c:85:8:max_serialized_size_common_msgs__msg__KeyState	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/key_state_type_support.c:105:15:key_state_max_serialized_size	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/key_state_type_support.c:131:1:rosidl_typesupport_microxrcedds_c__get_message_type_support_handle__common_msgs__msg__KeyState	0	static

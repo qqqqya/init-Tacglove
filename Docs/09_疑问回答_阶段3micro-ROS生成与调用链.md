@@ -64,7 +64,7 @@ Interfaces/common_msgs/
     └── DeviceSynchronization.srv
 ```
 
-再附上 [08_阶段3_micro-ROS消息接口设计.md](08_阶段3_micro-ROS消息接口设计.md) 作为业务说明、[stage3_pc_test.py](../Interfaces/stage3_pc_test.py) 作为当前监视/同步服务示例；Python 脚本不是消息定义，且**尚无 `LedCmd` publisher**。PC 团队自己的上位机程序要订阅 MCU 两条 PUB，发布一条 `LedCmd`，实现一个同步服务。
+再附上 [08_阶段3_micro-ROS消息接口设计.md](08_阶段3_micro-ROS消息接口设计.md) 作为业务说明、[stage3_pc_test.py](../cmdfile/stage3_pc_test.py) 作为当前监视/同步服务示例；Python 脚本不是消息定义，且**尚无 `LedCmd` publisher**。PC 团队自己的上位机程序要订阅 MCU 两条 PUB，发布一条 `LedCmd`，实现一个同步服务。
 
 | MCU 方向 | ROS 名称 / 类型 | 目前约定要确认的语义 |
 |---|---|---|
@@ -75,7 +75,7 @@ Interfaces/common_msgs/
 
 双方还应确认 `ROS_DOMAIN_ID=9`、节点固定 `mcu_dev`（开发期单板）、115200 USART2/CH340 只是 Agent↔MCU 的物理链路，以及时间戳使用 PC ROS clock。`package.xml` 目前的 `embedded-dev@example.com` 是占位 maintainer 地址；正式交付前应由团队确认实际维护人。`message_rx_count` 在回调收到 `LedCmd` 时先加一，即使六灯模式非法随后被 LED task 拒绝也会计数，**不能当作有效 cmd 成功执行次数**。
 
-当前代码还有两处**名称/注释与实际实现不一致**，交接时不能隐去：`Tasks/led_task.c` 中 `COLOR_BLUE={LED_BRIGHTNESS,0,LED_BRIGHTNESS}`，按 RGB 分量理解是红+蓝（紫/洋红），不是协议名 `MODE_BLUE_*` 所承诺的纯蓝；这次只说明现状，没有改动已验证的灯效。`BSP/KEY/bsp_key_handler.c/.h` 注释写 PA11，但读取的是 `key_cap` 引脚，而当前 `.ioc` 把 `key_cap` 配在 **PA0**；实际硬件链路应以 `.ioc`/生成的引脚宏为准，后续可统一修正注释。
+当前代码曾有两处**名称/注释与实际实现不一致**：`Tasks/led_task.c` 中 `COLOR_BLUE={LED_BRIGHTNESS,0,LED_BRIGHTNESS}`，按 RGB 分量理解是红+蓝（紫/洋红），不是协议名 `MODE_BLUE_*` 所承诺的纯蓝；此处仍保留已验证灯效。按键引脚现已确认并统一为 **PA11**，`.ioc`、生成引脚宏和BSP注释保持一致。
 
 ## 4. 终端 Agent 日志在说什么
 
@@ -101,7 +101,7 @@ Agent 是 PC/WSL 侧的 XRCE-DDS↔ROS 2 桥。它拿到串口字节，代表 MC
 | 分类 | 增加/改动 | 实际职责 |
 |---|---|---|
 | 协议源定义（PC/MCU 共用） | `Interfaces/common_msgs/{msg,srv,package.xml,CMakeLists.txt}` | 3 msg + 1 srv、生成配置、包元数据 |
-| PC 测试逻辑 | `Interfaces/stage3_pc_test.py` | 订阅按键/MCU 状态，回答同步请求；不直接操作串口 |
+| PC 测试逻辑 | `cmdfile/stage3_pc_test.py` | 订阅按键/MCU 状态，回答同步请求；不直接操作串口 |
 | MCU ROS 业务/连接状态机 | 新增 `Tasks/micro_ros_task.c/.h`；修改 `Tasks/task_manager.c/.h`并将任务状态集中到 `task_manager.h` | Agent ping、实体创建/销毁、Executor、PUB/SUB/Client、队列与任务创建 |
 | 原有任务衔接 | 修改 `Tasks/key_task.c`、`Tasks/led_task.c/.h` | 按键本地动作后另送 ROS 事件；LED 单元素 cmd 邮箱、远程模式和断线回本地 |
 | MCU 通信适配 | 新增 `dma_transport.c/.h` | USART2 RX 循环 DMA / TX DMA 与 micro-ROS 自定义 transport API 对接 |
@@ -153,12 +153,12 @@ micro_ros_task_entry() 的 for (;;)
 | `Tasks/micro_ros_task.c:211`、`:225` | 两个 callback | 收到 `LedCmd`、收到同步 service response 的处理 |
 | `Tasks/micro_ros_task.c:468` | `micro_ros_process_time_sync()` | 请求/超时/重试；实际发包为 `rcl_send_request()` |
 | `Tasks/led_task.c:413` | `led_task_entry()` | 独立消费 cmd Queue，驱动 PWM DMA，而非在 ROS 回调直接点灯 |
-| `Interfaces/stage3_pc_test.py:62` | `rclpy.spin()` | PC 的 subscription/service 回调事件循环 |
+| `cmdfile/stage3_pc_test.py:62` | `rclpy.spin()` | PC 的 subscription/service 回调事件循环 |
 
 ### 6.3 按键 MCU PUB：什么函数何时调用
 
 ```text
-PA0 → bsp_key_handler_process()/get_event()（key_task，每1 ms）
+PA11 → bsp_key_handler_process()/get_event()（key_task，每1 ms）
     ├─ led_task_on_short_press/long_press/double_click() → 本地LED/beep
     └─ micro_ros_task_enqueue_key_event(event) → 8元素Queue（仅Agent已连时）
          → micro_ros_publish_key_events() → xQueueReceive(0等待)
@@ -212,7 +212,7 @@ MCU RUNNING、未同步
 
 ## 8. 两种 Python 文件不要混成一种串口交互
 
-当前 [stage3_pc_test.py](../Interfaces/stage3_pc_test.py) 在 PC 的 ROS 2 Python 环境里：`rclpy.init()` → 创建两个 subscription 和一个 service → `rclpy.spin()` 持续调度回调。`_on_key_state()`/`_on_mcu_status()` 只打印 MCU 发布的数据；`_on_sync()` 填当前 PC ROS 时间并返回响应。**脚本没有键盘输入、没有 `serial.Serial()`、没有 LED publisher**；实际串口由 Agent 进程独占、读写。上位机要下 LED cmd，可另写 rclpy publisher 或使用 `ros2 topic pub`。
+当前 [stage3_pc_test.py](../cmdfile/stage3_pc_test.py) 在 PC 的 ROS 2 Python 环境里：`rclpy.init()` → 创建两个 subscription 和一个 service → `rclpy.spin()` 持续调度回调。`_on_key_state()`/`_on_mcu_status()` 只打印 MCU 发布的数据；`_on_sync()` 填当前 PC ROS 时间并返回响应。**脚本没有键盘输入、没有 `serial.Serial()`、没有 LED publisher**；实际串口由 Agent 进程独占、读写。上位机要下 LED cmd，可另写 rclpy publisher 或使用 `ros2 topic pub`。
 
 参考工程 [sn_tool.py](../../Tacglove/AppEncrypt/sn_tool.py) 是另一条**Bootloader 直连串口**路径：`input()` 读取用户在 PC 键盘输入的选择/SN，Python 先处理，再通过 `pyserial.Serial` 的 `ser.write()` 向 Bootloader 发字节（如 `*F_SN_R`、`#F_SN_W`、SN 字符串、跳转指令，升级时还有固件传输）。不是“键盘从串口传给 Python”；方向是**PC键盘 → Python → 串口 → MCU Bootloader**。参考另一个 [micro_ros_publish_device_ctrl_data.py](../../Tacglove/AppEncrypt/micro_ros_publish_device_ctrl_data.py) 也用 `input()`，但它随后调用 ROS `publisher.publish(msg)`，路径是**PC键盘 → Python ROS publisher → Agent → 串口 → MCU App**。当前项目阶段3只做后者的 ROS App 路径，尚未移植 Bootloader/SN/IAP。不要让 `sn_tool.py` 和 Agent 同时占用同一个 USART2/CH340 串口。
 

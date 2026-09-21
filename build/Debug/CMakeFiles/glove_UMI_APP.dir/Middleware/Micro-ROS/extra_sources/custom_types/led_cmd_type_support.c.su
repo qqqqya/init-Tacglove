@@ -1,8 +1,0 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c:20:48:led_cmd_header_callbacks	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c:34:13:led_cmd_cdr_serialize	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c:63:13:led_cmd_cdr_deserialize	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c:91:8:get_serialized_size_common_msgs__msg__LedCmd	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c:107:8:max_serialized_size_common_msgs__msg__LedCmd	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c:122:17:led_cmd_get_serialized_size	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c:129:15:led_cmd_max_serialized_size	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/custom_types/led_cmd_type_support.c:155:1:rosidl_typesupport_microxrcedds_c__get_message_type_support_handle__common_msgs__msg__LedCmd	4	static

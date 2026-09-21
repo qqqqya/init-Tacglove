@@ -1,4 +1,0 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/microros_transports/dma_transport.c:35:6:cubemx_transport_open	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/microros_transports/dma_transport.c:56:6:cubemx_transport_close	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/microros_transports/dma_transport.c:67:8:cubemx_transport_write	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/microros_transports/dma_transport.c:127:8:cubemx_transport_read	48	static

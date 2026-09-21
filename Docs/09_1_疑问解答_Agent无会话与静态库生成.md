@@ -35,7 +35,7 @@ create_topic / publisher / subscriber / requester
 如果终端B运行的是：
 
 ```bash
-python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/Interfaces/stage3_pc_test.py
+python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/cmdfile/stage3_pc_test.py
 ```
 
 脚本进入 `rclpy.spin()` 后只在收到 `key_state`、`mcu_status`，或者收到MCU同步请求时打印。MCU尚未建立会话时，它保持安静是正常的。`ros2 topic echo` 同理，会一直等待第一条消息。
@@ -174,7 +174,7 @@ STM32G474是Cortex-M4F，工程使用FPv4。这个差异不能只凭截图判定
 | `Tasks/led_task.c/.h` | 增加单元素最新值cmd Queue，执行PC下发的六灯和蜂鸣器模式，断线回本地控制 |
 | `Tasks/task_manager.c/.h` | 初始化两个Queue并直接创建micro-ROS任务 |
 | 根 `CMakeLists.txt` | 编译适配源文件、加入头文件、链接 `libmicroros.a` |
-| `Interfaces/stage3_pc_test.py` | PC端监听两个PUB并实现时间同步server |
+| `cmdfile/stage3_pc_test.py` | PC端监听两个PUB并实现时间同步server |
 
 ### 2.3 阶段2原有代码中哪些不应该重新移植
 

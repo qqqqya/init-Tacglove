@@ -1,6 +1,0 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/KEY/bsp_key_handler.c:30:13:key_read_level	8	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/KEY/bsp_key_handler.c:42:13:key_time_reached	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/KEY/bsp_key_handler.c:48:22:bsp_key_handler_init	4	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/KEY/bsp_key_handler.c:65:22:bsp_key_handler_process	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/KEY/bsp_key_handler.c:207:22:bsp_key_handler_get_event	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/BSP/KEY/bsp_key_handler.c:222:22:bsp_key_handler_clear_event	4	static

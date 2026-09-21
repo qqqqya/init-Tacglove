@@ -1,4 +1,0 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/microros_allocators.c:15:7:microros_allocate	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/microros_allocators.c:21:6:microros_deallocate	16	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/microros_allocators.c:31:7:microros_reallocate	24	static
-D:/InternWork/Code/Test_mygit/Tacapp_init/Middleware/Micro-ROS/extra_sources/microros_allocators.c:37:7:microros_zero_allocate	24	static

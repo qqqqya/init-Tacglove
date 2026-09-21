@@ -1,6 +1,0 @@
-D:/InternWork/Code/Test_mygit/Tacapp_init/build/Debug/CMakeFiles/glove_UMI_APP.dir
-D:/InternWork/Code/Test_mygit/Tacapp_init/build/Debug/CMakeFiles/edit_cache.dir
-D:/InternWork/Code/Test_mygit/Tacapp_init/build/Debug/CMakeFiles/rebuild_cache.dir
-D:/InternWork/Code/Test_mygit/Tacapp_init/build/Debug/cmake/stm32cubemx/CMakeFiles/STM32_Drivers.dir
-D:/InternWork/Code/Test_mygit/Tacapp_init/build/Debug/cmake/stm32cubemx/CMakeFiles/edit_cache.dir
-D:/InternWork/Code/Test_mygit/Tacapp_init/build/Debug/cmake/stm32cubemx/CMakeFiles/rebuild_cache.dir
