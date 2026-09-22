@@ -38,6 +38,12 @@ extern "C" {
 #define FIRMWARE_FLASH_PAGE_SIZE_BYTES     (0x00000800UL)
 #define FIRMWARE_SN_START_ADDRESS          (0x0807F800UL)
 
+/** @brief Bootloader与Application共用的SN存储格式。 */
+#define FIRMWARE_SN_VALID_FLAG              (0xA55A5AA5UL)
+#define FIRMWARE_SN_LENGTH_BYTES            (18U)
+#define FIRMWARE_SN_PREFIX                  "SN-TacGlove-"
+#define FIRMWARE_SN_PREFIX_LENGTH_BYTES     (12U)
+
 /** @brief Cortex-M4向量表要求的最小对齐。 */
 #define FIRMWARE_VECTOR_ALIGNMENT_BYTES    (0x00000200UL)
 

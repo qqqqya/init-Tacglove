@@ -18,7 +18,9 @@ Tacapp_init/
 │   └── STM32G474XX_BOOT_FLASH.ld    # 0x08000000、64 KiB
 ├── cmdfile/
 │   ├── sn_tool.py                   # Bootloader直连串口交互工具
-│   └── stage3_pc_test.py            # APP阶段micro-ROS PC测试程序
+│   ├── micro_ros_subscribe_device_data.py # 自动发现、监听PUB和同步服务
+│   ├── micro_ros_publish_device_ctrl_data.py # 选择设备并发布LED cmd
+│   └── stage3_pc_test.py            # 兼容旧命令的监听工具入口
 └── Common/Inc/firmware_layout.h     # 两个工程共用的Flash分区契约
 ```
 
@@ -35,13 +37,15 @@ Tacapp_init/
 
 ## 2. 当前阶段边界
 
-本次完成小阶段5.2：
+本次完成小阶段5.2及5.2B代码：
 
 - Bootloader独立工程和64 KiB链接区域；
 - APP1有效性检查；
 - 通过USART2命令跳转APP1；
 - 固定格式SN的一次性写入和读取；
 - PC端交互式SNTool；
+- Application只读SN并动态生成micro-ROS节点、Topic和Service名称；
+- PC端按 `mcu_SN_*` 自动发现设备、监听上报和下发LED/蜂鸣器cmd；
 - Application和Bootloader的按键引脚均同步为PA11，内部上拉；
 - `stage3_pc_test.py`和`sn_tool.py`统一放到根目录 `cmdfile`。
 
@@ -58,7 +62,7 @@ Tacapp_init/
 
 | 区域             | 地址范围                    | 大小      | 当前用途            |
 | -------------- | ----------------------- | -------:| --------------- |
-| ==Bootloade==r | `0x08000000~0x0800FFFF` | 64 KiB  | 启动、菜单、SN和跳转     |
+| Bootloader     | `0x08000000~0x0800FFFF` | 64 KiB  | 启动、菜单、SN和跳转     |
 | APP1           | `0x08010000~0x0803FFFF` | 192 KiB | 当前正式Application |
 | APP2           | `0x08040000~0x0806FFFF` | 192 KiB | 后续IAP备份区，当前不读写  |
 | 配置区            | `0x08070000~0x0807F7FF` | 62 KiB  | 预留              |
@@ -193,7 +197,8 @@ cmake --build --preset Release
 
 | 固件         | 向量表地址        | Flash占用 | RAM占用  | 分区上限   |
 | ---------- | ------------:| -------:| ------:| ------:|
-| Bootloader | `0x08000000` | 9976 B  | 1760 B | 64 KiB |
+| Bootloader | `0x08000000` | 10012 B | 1760 B | 64 KiB |
+| Application | `0x08010000` | 144652 B | 89584 B | 192 KiB |
 
 安装PC依赖并运行：
 
@@ -205,6 +210,50 @@ python D:\InternWork\Code\Test_mygit\Tacapp_init\cmdfile\sn_tool.py --port COM12
 不提供 `--port` 时，工具自动优先使用 `/dev/ttyUSB0`；若不存在，则按顺序自动选择
 其他 `/dev/ttyUSB*` 或 `/dev/ttyACM*`，不再要求用户选择。菜单3不再二次确认，收到
 选择后立即发送跳转命令。SNTool直连USART2，不能与micro-ROS Agent同时占用同一个CH340串口。
+
+### 8.1 Application的SN动态命名
+
+Application通过只读驱动 `Application/BSP/SN/bsp_sn_driver.c`读取公共SN页。它不会擦除或写入SN；写权限仍只属于Bootloader。创建micro-ROS实体前，将SN中的连字符转换为下划线并统一生成：
+
+```text
+mcu_<SN下划线形式>
+/mcu_<SN下划线形式>/key_state
+/mcu_<SN下划线形式>/mcu_status
+/mcu_<SN下划线形式>/led_cmd
+/mcu_<SN下划线形式>/sync
+```
+
+因此当前格式 `SN-TacGlove-000001`会得到：
+
+```text
+mcu_SN_TacGlove_000001
+/mcu_SN_TacGlove_000001/key_state
+/mcu_SN_TacGlove_000001/mcu_status
+/mcu_SN_TacGlove_000001/led_cmd
+/mcu_SN_TacGlove_000001/sync
+```
+
+用户给出的格式示例 `SN-20260825-A00001`会按同一规则得到
+`mcu_SN_20260825_A00001`。当前Bootloader/SNTool仍执行已确认的
+`SN-TacGlove-000000`合同；以后若正式切换格式，应同时修改Bootloader校验、SNTool校验和生产数据规则。
+
+SN页无有效标记或内容非法时，Application使用 `mcu_SN_UNPROGRAMMED`。这个回退值用于诊断，不允许作为量产设备的正式名称。
+
+启动Agent后，在另两个已source接口工作区的WSL终端分别运行：
+
+```bash
+python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/cmdfile/micro_ros_subscribe_device_data.py
+python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/cmdfile/micro_ros_publish_device_ctrl_data.py
+```
+
+两个工具默认等待ROS 2发现并列出全部 `mcu_SN_*`设备；只有一台时自动选择，多台时显示序号菜单。也可跳过发现直接指定：
+
+```bash
+python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/cmdfile/micro_ros_subscribe_device_data.py \
+  --device SN-TacGlove-000001
+```
+
+监听工具订阅 `key_state`、`mcu_status`并提供 `sync` Service；控制工具通过菜单设置单颗/全部LED和蜂鸣器，再发布完整 `LedCmd`。旧的 `stage3_pc_test.py`保留为监听工具的兼容入口。
 
 ## 9. 烧录与上板验证顺序
 
@@ -221,8 +270,39 @@ python D:\InternWork\Code\Test_mygit\Tacapp_init\cmdfile\sn_tool.py --port COM12
 11. 选择3，无二次确认；应先收到 `F000`，随后Application启动，SNTool关闭串口。
 12. 启动Agent，复测LED、PA11按键、蜂鸣器和micro-ROS pub/sub。
 
-## 10. 下一小阶段
+## 10. 阶段5后续小阶段计划
 
-小阶段5.2代码和PC工具已完成编译与静态检查，待实板验证上述串口、Flash和跳转链路。
+### 10.1 小阶段5.2B：SN绑定ROS接口（当前）
 
-实板确认后，小阶段5.3再单独实施：YMODEM接收、APP2下载区、固件完整性检查和APP1更新。回滚与加密仍应继续拆成后续独立小阶段，不能和首次YMODEM下载同时引入。
+代码、PC菜单工具、Application/Bootloader Release构建和Python语法检查已经完成。实板需要确认：写入SN后进入APP，ROS图中只出现对应的 `mcu_SN_*`设备；按键和状态上报、同步回复、六灯与蜂鸣器cmd均成功；两块不同SN设备同时在线时互不串话。实板通过后才能关闭5.2B。
+
+### 10.2 小阶段5.3：明文YMODEM安全下载到APP2
+
+目标只做“接收和验证”，不直接擦除APP1：
+
+1. 恢复参考工程YMODEM接收状态机，菜单4进入下载；
+2. 接收目标固定为APP2 `0x08040000~0x0806FFFF`；
+3. 下载前检查文件长度，写入中检查地址边界和Flash错误；
+4. 完成后检查向量表、实际长度与CRC32；
+5. 合法固件保留在APP2并返回明确成功码，非法固件标记无效；
+6. 覆盖正常、取消、超时、错误包、超大文件和传输中断测试。
+
+完成标志：任何下载失败都不影响当前APP1和SN，复位仍能运行原Application。
+
+### 10.3 小阶段5.4：APP安装、持久化状态与掉电回滚
+
+在5.3稳定后，定义升级状态记录并实现APP1备份/安装/恢复。分别在备份、擦除、复制和校验过程中人为断电；复位后必须能继续恢复或进入安全菜单，不能启动半写入镜像。
+
+### 10.4 小阶段5.5：固件头、版本和安全包
+
+统一固件头中的硬件型号、版本、长度、校验和构建信息；先确定真实性/完整性策略，再加入加密。加密不能代替签名或消息认证；防降级、密钥存储和返修权限需要单独评审。
+
+### 10.5 小阶段5.6：首次启动确认与IWDG
+
+Application通过健康检查后写入“新版本启动成功”确认；多次启动失败触发回滚或安全菜单。IWDG最后接入，由Bootloader长操作和Application健康任务分别承担明确的喂狗职责。
+
+### 10.6 小阶段5.7：量产工具与总体验收
+
+在 `cmdfile`补齐构建、打包、升级和日志工具；完成至少20轮升级/回滚、关键步骤断电、8小时micro-ROS通信、双设备SN隔离及升级前后SN不变验证，并固化烧录与返修流程。
+
+下一步进入条件：用户完成5.2B实板验证并反馈结果后，再开始5.3。5.3不会把回滚、加密或IWDG混在第一次YMODEM移植中。

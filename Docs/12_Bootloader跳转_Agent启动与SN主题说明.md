@@ -314,14 +314,23 @@ ros2 topic list -t
 ros2 service list -t
 ```
 
-当前工程尚未启用SN动态命名时，预期接口为：
+当前工程已启用SN动态命名。若写入的是 `SN-TacGlove-000001`，预期接口为：
 
 ```text
-/mcu_dev/key_state
-/mcu_dev/mcu_status
-/mcu_dev/led_cmd
-/mcu_dev/sync
+/mcu_SN_TacGlove_000001/key_state
+/mcu_SN_TacGlove_000001/mcu_status
+/mcu_SN_TacGlove_000001/led_cmd
+/mcu_SN_TacGlove_000001/sync
 ```
+
+可直接运行自动发现工具，不需要手工输入Topic全名：
+
+```bash
+python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/cmdfile/micro_ros_subscribe_device_data.py
+python3 /mnt/d/InternWork/Code/Test_mygit/Tacapp_init/cmdfile/micro_ros_publish_device_ctrl_data.py
+```
+
+前者监听按键和MCU状态并响应同步请求，后者显示设备及LED/蜂鸣器cmd菜单。SN无效时会出现 `mcu_SN_UNPROGRAMMED`，应先退出Agent，使用SNTool完成写入后复位。
 
 ## 6. 参考工程如何根据SN发送消息
 
@@ -381,21 +390,17 @@ Service：/mcu_<SN下划线形式>/sync
 PC软件先知道或扫描设备SN，再订阅/发布对应路径。Agent只做XRCE-DDS与ROS 2 DDS之间的桥接，
 不会替MCU自动给Topic添加SN。
 
-### 6.3 当前工程与参考工程的差别
+### 6.3 当前工程的实现
 
-当前工程在 `Application/Tasks/micro_ros_task.h` 中仍使用固定名称：
+当前工程已经按参考思路完成SN隔离，但保留本项目自己的接口后缀：
 
-```c
-#define MICRO_ROS_NODE_NAME       "mcu_dev"
-#define MICRO_ROS_KEY_TOPIC       "/mcu_dev/key_state"
-#define MICRO_ROS_STATUS_TOPIC    "/mcu_dev/mcu_status"
-#define MICRO_ROS_LED_CMD_TOPIC   "/mcu_dev/led_cmd"
-#define MICRO_ROS_SYNC_SERVICE    "/mcu_dev/sync"
-```
+1. `Common/Inc/firmware_layout.h`统一定义SN地址、有效标记和长度；
+2. `Application/BSP/SN/bsp_sn_driver.c`只读并校验SN，不拥有擦写权限；
+3. `micro_ros_task`创建ROS实体前把SN转换成安全名称片段；
+4. 节点和四个接口使用同一设备前缀，避免部分Topic仍落在固定路径；
+5. PC的监听和控制工具扫描 `mcu_SN_*`并支持多设备选择。
 
-所以当前阶段PC端不应使用SN路径。后续如果按参考工程启用SN隔离，需要在Application增加SN只读模块，
-在创建ROS实体前生成动态名称，同时把动态命名规则交给上位机团队。这个功能与本次Boot跳转修复分开，
-本次没有擅自修改阶段3已经验证过的Topic。
+当前SN合同是固定18字节 `SN-TacGlove-000000`。用户示例 `SN-20260825-A00001`同样能被Application的名称转换逻辑处理，但Bootloader和SNTool尚未切换到该生产格式；如需切换，必须统一修改并验证整个SN写入合同。
 
 ## 7. 本次源码变更清单
 
@@ -406,7 +411,11 @@ PC软件先知道或扫描设备SN，再订阅/发布对应路径。Agent只做X
 | `Bootloader/Middleware/YMODEM/menu.c` | 删除按键/SN/构建类型判断；写SN后不自动跳；修正MSP与复位入口跳转 |
 | `Bootloader/CMakeLists.txt` | 删除Debug专用自动跳转宏 |
 | `Application/Core/Src/main.c` | APP接管VTOR后显式开启中断 |
+| `Application/BSP/SN/bsp_sn_driver.c/.h` | 只读公共SN页并校验18字节SN |
+| `Application/Tasks/micro_ros_task.c/.h` | 从SN生成节点、Topic和Service名称 |
 | `cmdfile/sn_tool.py` | 写SN成功后留在菜单；菜单3仍直接跳转且无二次确认 |
+| `cmdfile/micro_ros_subscribe_device_data.py` | 自动发现设备、监听两个PUB并提供同步Service |
+| `cmdfile/micro_ros_publish_device_ctrl_data.py` | 自动发现设备并用菜单发布六灯/蜂鸣器cmd |
 | `Docs/11_阶段5_Bootloader_SNTool_IAP实施记录.md` | 同步新的单开关规则和验证步骤 |
 
 ## 8. 本轮实板验收点

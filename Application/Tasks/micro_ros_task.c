@@ -13,6 +13,7 @@
 #include "task.h"
 
 #include "led_task.h"
+#include "bsp_sn_driver.h"
 #include "usart.h"
 
 #include "dma_transport.h"
@@ -56,6 +57,13 @@ static char s_mcu_frame_id[] = "mcu";
 static char s_firmware_version[] = MICRO_ROS_FIRMWARE_VERSION;
 static char s_led_cmd_frame_buffer[MICRO_ROS_FRAME_BUFFER_SIZE];
 static char s_sync_frame_buffer[MICRO_ROS_FRAME_BUFFER_SIZE];
+static char s_device_sn[BSP_SN_BUFFER_SIZE];
+static char s_ros_device_id[BSP_SN_BUFFER_SIZE];
+static char s_node_name[MICRO_ROS_DEVICE_NAME_SIZE];
+static char s_key_topic[MICRO_ROS_INTERFACE_NAME_SIZE];
+static char s_status_topic[MICRO_ROS_INTERFACE_NAME_SIZE];
+static char s_led_cmd_topic[MICRO_ROS_INTERFACE_NAME_SIZE];
+static char s_sync_service[MICRO_ROS_INTERFACE_NAME_SIZE];
 
 static bool s_time_synced;
 static bool s_sync_pending;
@@ -63,33 +71,144 @@ static int64_t s_sync_sequence;
 static int64_t s_epoch_base_ns;
 static TickType_t s_sync_request_tick;
 
+/**
+ * @brief 使用设备名和接口后缀生成完整ROS名称。
+ * @param[out] output 接收名称的缓冲区。
+ * @param output_size 输出缓冲区容量。
+ * @param prefix 名称前缀，可为空字符串。
+ * @param identifier 设备标识或节点名。
+ * @param suffix 接口后缀，可为空字符串。
+ * @retval TASK_OK 名称生成成功。
+ * @retval TASK_ERROR_RESOURCE 输出缓冲区容量不足。
+ */
+static task_status_t micro_ros_format_name(char *output,
+                                           uint32_t output_size,
+                                           const char *prefix,
+                                           const char *identifier,
+                                           const char *suffix){
+    const uint32_t prefix_length = (uint32_t)strlen(prefix);
+    const uint32_t identifier_length = (uint32_t)strlen(identifier);
+    const uint32_t suffix_length = (uint32_t)strlen(suffix);
+    const uint32_t total_length =
+        prefix_length + identifier_length + suffix_length;
+
+    if (output_size <= total_length)
+    {
+        output[0] = '\0';
+        return TASK_ERROR_RESOURCE;
+    }
+
+    memcpy(output, prefix, prefix_length);
+    memcpy(&output[prefix_length], identifier, identifier_length);
+    memcpy(&output[prefix_length + identifier_length],
+           suffix,
+           suffix_length);
+    output[total_length] = '\0';
+
+    return TASK_OK;
+}
+
+/**
+ * @brief 从Flash读取SN并生成本设备全部ROS节点、Topic和Service名称。
+ * @retval TASK_OK 名称已经生成。
+ * @retval TASK_ERROR_RESOURCE 任一名称缓冲区容量不足。
+ * @note SN无效时使用mcu_SN_UNPROGRAMMED，便于产测发现未写SN设备。
+ */
+static task_status_t micro_ros_init_device_names(void){
+    uint32_t index;
+    sn_driver_status_t sn_status =
+        bsp_sn_driver_read(s_device_sn, sizeof(s_device_sn));
+    if (SN_OK != sn_status){
+        memcpy(s_device_sn,
+               MICRO_ROS_FALLBACK_DEVICE_SN,
+               sizeof(MICRO_ROS_FALLBACK_DEVICE_SN));
+    }
+
+    for (index = 0U;
+         (index < (sizeof(s_ros_device_id) - 1U)) &&
+         ('\0' != s_device_sn[index]);
+         ++index)
+    {
+        const char character = s_device_sn[index];
+        const bool is_digit = ('0' <= character) && ('9' >= character);
+        const bool is_upper = ('A' <= character) && ('Z' >= character);
+        const bool is_lower = ('a' <= character) && ('z' >= character);
+        s_ros_device_id[index] =
+            (is_digit || is_upper || is_lower || ('_' == character)) ?
+            character : '_';
+    }
+    s_ros_device_id[index] = '\0';
+
+    if (TASK_OK != micro_ros_format_name(s_node_name,
+                                         sizeof(s_node_name),
+                                         MICRO_ROS_DEVICE_NAME_PREFIX,
+                                         s_ros_device_id,
+                                         ""))
+    {
+        return TASK_ERROR_RESOURCE;
+    }
+    if (TASK_OK != micro_ros_format_name(s_key_topic,
+                                         sizeof(s_key_topic),
+                                         "/",
+                                         s_node_name,
+                                         MICRO_ROS_KEY_TOPIC_SUFFIX))
+    {
+        return TASK_ERROR_RESOURCE;
+    }
+    if (TASK_OK != micro_ros_format_name(s_status_topic,
+                                         sizeof(s_status_topic),
+                                         "/",
+                                         s_node_name,
+                                         MICRO_ROS_STATUS_TOPIC_SUFFIX))
+    {
+        return TASK_ERROR_RESOURCE;
+    }
+    if (TASK_OK != micro_ros_format_name(s_led_cmd_topic,
+                                         sizeof(s_led_cmd_topic),
+                                         "/",
+                                         s_node_name,
+                                         MICRO_ROS_LED_CMD_TOPIC_SUFFIX))
+    {
+        return TASK_ERROR_RESOURCE;
+    }
+    if (TASK_OK != micro_ros_format_name(s_sync_service,
+                                         sizeof(s_sync_service),
+                                         "/",
+                                         s_node_name,
+                                         MICRO_ROS_SYNC_SERVICE_SUFFIX))
+    {
+        return TASK_ERROR_RESOURCE;
+    }
+
+    return TASK_OK;
+}
+
 /** @brief 将ROS消息对象绑定到全部静态字符串缓冲区。 */
 static void micro_ros_init_messages(void){
     
-    memset(&s_key_state_msg, 0, sizeof(s_key_state_msg));
-    s_key_state_msg.header.frame_id.data = s_key_frame_id;
-    s_key_state_msg.header.frame_id.size = strlen(s_key_frame_id);
-    s_key_state_msg.header.frame_id.capacity = sizeof(s_key_frame_id);
+    memset(&s_key_state_msg, 0, sizeof(s_key_state_msg));   // 初始化按键状态消息
+    s_key_state_msg.header.frame_id.data        = s_key_frame_id;
+    s_key_state_msg.header.frame_id.size        = strlen(s_key_frame_id);
+    s_key_state_msg.header.frame_id.capacity    = sizeof(s_key_frame_id);
 
-    memset(&s_mcu_status_msg, 0, sizeof(s_mcu_status_msg));
-    s_mcu_status_msg.header.frame_id.data = s_mcu_frame_id;
-    s_mcu_status_msg.header.frame_id.size = strlen(s_mcu_frame_id);
-    s_mcu_status_msg.header.frame_id.capacity = sizeof(s_mcu_frame_id);
-    s_mcu_status_msg.firmware_version.data = s_firmware_version;
-    s_mcu_status_msg.firmware_version.size = strlen(s_firmware_version);
-    s_mcu_status_msg.firmware_version.capacity =
-        sizeof(s_firmware_version);
+    memset(&s_mcu_status_msg, 0, sizeof(s_mcu_status_msg)); // 初始化MCU状态消息
+    s_mcu_status_msg.header.frame_id.data        = s_mcu_frame_id;
+    s_mcu_status_msg.header.frame_id.size        = strlen(s_mcu_frame_id);
+    s_mcu_status_msg.header.frame_id.capacity    = sizeof(s_mcu_frame_id);
+    s_mcu_status_msg.firmware_version.data       = s_firmware_version;
+    s_mcu_status_msg.firmware_version.size       = strlen(s_firmware_version);
+    s_mcu_status_msg.firmware_version.capacity   = sizeof(s_firmware_version);
 
-    memset(&s_led_cmd_msg, 0, sizeof(s_led_cmd_msg));
-    s_led_cmd_msg.header.frame_id.data = s_led_cmd_frame_buffer;
-    s_led_cmd_msg.header.frame_id.capacity = sizeof(s_led_cmd_frame_buffer);
+    memset(&s_led_cmd_msg, 0, sizeof(s_led_cmd_msg));       // 初始化LED命令消息
+    s_led_cmd_msg.header.frame_id.data           = s_led_cmd_frame_buffer;
+    s_led_cmd_msg.header.frame_id.capacity       = sizeof(s_led_cmd_frame_buffer);
 
-    memset(&s_sync_request, 0, sizeof(s_sync_request));
-    s_sync_request.sync_request = true;// 请求同步
+    memset(&s_sync_request, 0, sizeof(s_sync_request)); // 初始化同步请求消息
+    s_sync_request.sync_request                  = true;  // 请求同步
 
-    memset(&s_sync_response, 0, sizeof(s_sync_response));
-    s_sync_response.header.frame_id.data = s_sync_frame_buffer;
-    s_sync_response.header.frame_id.capacity = sizeof(s_sync_frame_buffer);
+    memset(&s_sync_response, 0, sizeof(s_sync_response)); // 初始化同步响应消息
+    s_sync_response.header.frame_id.data         = s_sync_frame_buffer;
+    s_sync_response.header.frame_id.capacity     = sizeof(s_sync_frame_buffer);
 }
 
 /**
@@ -235,7 +354,7 @@ static task_status_t micro_ros_create_entities(void){
     
     // 创建节点
     result = rclc_node_init_default(&s_node,
-                                    MICRO_ROS_NODE_NAME,
+                                    s_node_name,
                                     "",
                                     &s_support);
     if (RCL_RET_OK != result){
@@ -251,7 +370,7 @@ static task_status_t micro_ros_create_entities(void){
                                              common_msgs,
                                              msg,
                                              KeyState),
-                                         MICRO_ROS_KEY_TOPIC);
+                                         s_key_topic);
     if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
@@ -262,7 +381,7 @@ static task_status_t micro_ros_create_entities(void){
         &s_mcu_status_pub,
         &s_node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(common_msgs, msg, MCUStatus),
-        MICRO_ROS_STATUS_TOPIC);
+        s_status_topic);
     if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
@@ -275,7 +394,7 @@ static task_status_t micro_ros_create_entities(void){
                                                 common_msgs,
                                                 msg,
                                                 LedCmd),
-                                            MICRO_ROS_LED_CMD_TOPIC);
+                                            s_led_cmd_topic);
     if (RCL_RET_OK != result)
     {
         return TASK_ERROR;
@@ -287,7 +406,7 @@ static task_status_t micro_ros_create_entities(void){
         &s_sync_client,
         &s_node,
         ROSIDL_GET_SRV_TYPE_SUPPORT(common_msgs, srv,DeviceSynchronization),
-        MICRO_ROS_SYNC_SERVICE);
+        s_sync_service);
     if (RCL_RET_OK != result){
         return TASK_ERROR;
     }
@@ -477,6 +596,11 @@ task_status_t micro_ros_task_enqueue_key_event(uint8_t event_type){//将已识�
 
 void micro_ros_task_entry(void *argument){
     if (!micro_ros_init_allocator())
+    {
+        vTaskSuspend(NULL);
+    }
+
+    if (TASK_OK != micro_ros_init_device_names())   // 初始化设备名称获取sn设备名称  为后续msg传递
     {
         vTaskSuspend(NULL);
     }

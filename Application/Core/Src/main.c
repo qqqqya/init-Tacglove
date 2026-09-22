@@ -112,7 +112,7 @@ int main(void)
   if (TASK_OK != task_manager_init())
   {
     Error_Handler();
-  }
+  } 
 
   vTaskStartScheduler();
   Error_Handler();

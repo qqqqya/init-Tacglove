@@ -48,6 +48,7 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     BSP/LED/bsp_led_handler.c
     BSP/KEY/bsp_key_handler.c
     BSP/BEEP/bsp_beep_driver.c
+    BSP/SN/bsp_sn_driver.c
     Tasks/led_task.c
     Tasks/key_task.c
     Tasks/micro_ros_task.c
@@ -76,6 +77,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
     BSP/LED
     BSP/KEY
     BSP/BEEP
+    BSP/SN
     Tasks
     Middleware/FreeRTOS
     Middleware/FreeRTOS/include

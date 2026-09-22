@@ -13,7 +13,8 @@
  *       设为1：APP1有效时上电直接跳转APP；APP1无效时仍进入菜单。
  *       开发阶段需要跳过SNTool时只修改此处，不再依赖按键、SN或构建类型。
  */
-#define BOOT_POWER_ON_JUMP_APP (1U)
+// #define BOOT_POWER_ON_JUMP_APP (0U)      //从Bootloader菜单跳转APP
+#define BOOT_POWER_ON_JUMP_APP (1U)   //直接跳转APP
 
 #define BOOT_SYS_JUMP_APP     (0xF000U)
 #define BOOT_SYS_RECOVERING   (0xF001U)

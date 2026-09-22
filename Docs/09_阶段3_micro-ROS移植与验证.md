@@ -1,5 +1,7 @@
 # 09 阶段3 micro-ROS移植与验证
 
+> 历史说明：本文保留阶段3首次以固定 `/mcu_dev`联调的原始记录。阶段5.2B已改为SN动态前缀，当前操作请使用 `mcu_SN_<SN下划线形式>`以及 `cmdfile/micro_ros_subscribe_device_data.py`、`cmdfile/micro_ros_publish_device_ctrl_data.py`；不要再照抄本文的固定Topic作为当前配置。
+
 ## 1. 当前结论
 
 阶段3的固件实现、PC端接口源包和联调脚本已经接入工程，Debug与Release均已完成编译链接。当前状态是“代码侧完成，等待板上ROS 2联合验证”，不能在完成实机断线恢复和长稳测试前标记为最终验收通过。

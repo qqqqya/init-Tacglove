@@ -42,10 +42,25 @@ common_msgs/
 
 沿用参考工程的SN隔离方式：
 
-- 节点名：`mcu_<device_id>`；
-- 开发阶段：`mcu_dev`；
-- 正式阶段：从SN派生，将 `-` 转换为 `_`；
-- Domain ID：暂按参考工程的9，PC端和MCU端必须一致。
+- Application从Bootloader约定的SN页只读SN；
+- 将SN中的 `-`及其他不适合ROS名称的字符转换为 `_`；
+- 节点名：`mcu_<SN下划线形式>`；
+- Topic/Service前缀：`/mcu_<SN下划线形式>`；
+- SN无效或未写入时使用 `mcu_SN_UNPROGRAMMED`，量产测试必须拦截该名称；
+- Domain ID：沿用参考工程的9，PC端和MCU端必须一致。
+
+当前规定格式 `SN-TacGlove-000001`对应：
+
+```text
+节点：   mcu_SN_TacGlove_000001
+PUB：   /mcu_SN_TacGlove_000001/key_state
+PUB：   /mcu_SN_TacGlove_000001/mcu_status
+SUB：   /mcu_SN_TacGlove_000001/led_cmd
+Client：/mcu_SN_TacGlove_000001/sync
+```
+
+如果后续正式SN合同改为示例 `SN-20260825-A00001`，同一代码会生成
+`mcu_SN_20260825_A00001`及 `/mcu_SN_20260825_A00001/...`，但Bootloader、SNTool和生产数据库必须先共同变更SN格式，不能只改Topic字符串。
 
 | MCU角色 | topic/srv | 类型 | 触发方式 |
 |---|---|---|---|
@@ -308,12 +323,14 @@ LED2~LED7 <- led_task <- Queue <- led_cmd SUB <---------┘
 6. 停止Agent或拔插USB时MCU不死机，本地按键、灯和蜂鸣器继续工作；恢复后ROS实体自动重建。
 7. 连续运行8小时无不可恢复断线，并记录任务栈高水位、最小heap、UART/DMA错误和消息计数。
 
-## 11. 已采用的开发期配置
+## 11. 当前配置
 
 - Domain ID沿用参考工程的9；
-- 节点固定为 `mcu_dev`，本阶段按单板联调；
+- 节点、Topic和Service已经改为从SN动态派生；
+- Application通过 `BSP/SN/bsp_sn_driver`读取共用SN页，不提供写接口；
 - PC端类型源包放在工程 `Interfaces/common_msgs`；
 - `MCUStatus`、`DeviceSynchronization`保持参考工程类型不变；
 - 按键消息由参考 `ButtonEvent`更名为与topic一致的 `KeyState`，字段和事件值不变；
 - `KeyState`和 `LedCmd`的临时类型支持已经并入MCU工程，统一静态库重新生成后删除临时实现；
-- 正式多板命名和SN派生留到Bootloader/SN阶段，不在当前开发固件中提前引入。
+- `cmdfile/micro_ros_subscribe_device_data.py`负责自动发现、监听和同步服务；
+- `cmdfile/micro_ros_publish_device_ctrl_data.py`负责选择设备并下发六灯/蜂鸣器cmd。

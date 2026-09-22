@@ -25,13 +25,16 @@
 #define MICRO_ROS_SYNC_RETRY_MS          2000U
 #define MICRO_ROS_SYNC_RESPONSE_MS       1500U
 #define MICRO_ROS_FRAME_BUFFER_SIZE      64U
+#define MICRO_ROS_DEVICE_NAME_SIZE       32U
+#define MICRO_ROS_INTERFACE_NAME_SIZE    64U
 
-/** @brief ROS节点、Topic、Service和版本标识。 */
-#define MICRO_ROS_NODE_NAME              "mcu_dev"
-#define MICRO_ROS_KEY_TOPIC              "/mcu_dev/key_state"
-#define MICRO_ROS_STATUS_TOPIC           "/mcu_dev/mcu_status"
-#define MICRO_ROS_LED_CMD_TOPIC          "/mcu_dev/led_cmd"
-#define MICRO_ROS_SYNC_SERVICE           "/mcu_dev/sync"
+/** @brief 根据设备SN动态生成ROS节点、Topic和Service名称。 */
+#define MICRO_ROS_DEVICE_NAME_PREFIX     "mcu_"
+#define MICRO_ROS_KEY_TOPIC_SUFFIX       "/key_state"
+#define MICRO_ROS_STATUS_TOPIC_SUFFIX    "/mcu_status"
+#define MICRO_ROS_LED_CMD_TOPIC_SUFFIX   "/led_cmd"
+#define MICRO_ROS_SYNC_SERVICE_SUFFIX    "/sync"
+#define MICRO_ROS_FALLBACK_DEVICE_SN     "SN_UNPROGRAMMED"
 #define MICRO_ROS_FIRMWARE_VERSION       "0.3.0-dev"
 
 /** @brief micro-ROS任务连接状态。 */

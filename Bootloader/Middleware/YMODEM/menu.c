@@ -183,7 +183,7 @@ void Main_Menu(void){
             continue;
         }
 
-        switch (key)
+        switch (key)// 串口接收到的cmd
         {
             case (uint8_t)'1':
                 Boot_JumpToApp();
