@@ -36,7 +36,8 @@ BOOT_CODE_MAP = {
 }
 
 BACKGROUND_CODES = {0xF00E, 0xF00F}
-
+    # 0xF00E: "已进入Bootloader菜单",
+    # 0xF00F: "等待用户输入指令",
 
 class BootloaderController:
     """封装参考工程兼容的Bootloader串口命令。"""
@@ -45,16 +46,16 @@ class BootloaderController:
         self.port = port
         self.baud = baud
         self.serial = serial.Serial(
-            port=port,
-            baudrate=baud,
+            port=port,                      #  串口路径，如 /dev/ttyUSB0 
+            baudrate=baud,  
             timeout=0.1,
             write_timeout=1.0,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,      # 无校验位
+            stopbits=serial.STOPBITS_ONE,   # 1位停止位
+            bytesize=serial.EIGHTBITS,      # 8位数据位
         )
-        time.sleep(0.2)
-        self.serial.reset_input_buffer()
+        time.sleep(0.2)                     # 等待200ms让硬件稳定
+        self.serial.reset_input_buffer()    # 清空输入缓冲区
 
     def close(self) -> None:
         """关闭串口。"""
@@ -64,15 +65,15 @@ class BootloaderController:
     def _start_command(self, command: bytes) -> None:
         self.serial.reset_input_buffer()
         self.serial.write(command)  # 发送命令
-        self.serial.flush()
+        self.serial.flush()         # 清空缓冲区
 
     def _read_exact(self, length: int, timeout: float) -> bytes:
         deadline = time.monotonic() + timeout
         data = bytearray()
         while len(data) < length and time.monotonic() < deadline:
-            chunk = self.serial.read(length - len(data))
+            chunk = self.serial.read(length - len(data))     # 读取数据
             if chunk:
-                data.extend(chunk)
+                data.extend(chunk)                          # 累加数据
         return bytes(data)
 
     def _read_status(
@@ -89,7 +90,7 @@ class BootloaderController:
             code = (frame[0] << 8) | frame[1]
             if code in accepted_codes:
                 return code
-            if code not in BACKGROUND_CODES:
+            if code not in BACKGROUND_CODES:        # 排除背景状态码    
                 return code
         return None
 
@@ -183,9 +184,9 @@ def choose_port(configured_port: Optional[str]) -> str:
     if configured_port:
         return configured_port
 
-    ports = list(list_ports.comports())
-    detected_devices = [port.device for port in ports]
-    if DEFAULT_PORT in detected_devices:
+    ports = list(list_ports.comports())                 # 枚举所有串口
+    detected_devices = [port.device for port in ports]  # 提取串口路径
+    if DEFAULT_PORT in detected_devices:                # DEFAULT_PORT = "/dev/ttyUSB0" in detected_devices 中
         print(f"自动检测到默认串口：{DEFAULT_PORT}")
         return DEFAULT_PORT
 
@@ -228,8 +229,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     try:
-        port = choose_port(args.port)
-        controller = BootloaderController(port, args.baud)
+        port = choose_port(args.port)       # 选择串口--检测到串口 用的库工具 list_ports 
+        controller = BootloaderController(port, args.baud)  # 初始化Bootloader控制器
+                                                            # 直接用instance 方法 调用的是init 传的参数除了self 都有
     except (ValueError, serial.SerialException) as exc:
         print(f"打开串口失败：{exc}")
         return 1
@@ -238,9 +240,9 @@ def main() -> int:
     try:
         while True:
             print_menu()
-            choice = input("请选择：").strip()
+            choice = input("请选择：").strip()              # 等待用户按键
             if choice == "1":
-                controller.read_sn()
+                controller.read_sn()                        # 读取SN  instance 方法调用read_sn 方法
             elif choice == "2":
                 sn = input("请输入SN（例如SN-TacGlove-000001）：").strip()
                 if controller.write_sn(sn):

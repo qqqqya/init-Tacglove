@@ -160,7 +160,7 @@ size_t cubemx_transport_read(struct uxrCustomTransport *transport,
     {
         vTaskDelay(pdMS_TO_TICKS(1U));
         dma_tail = dma_transport_rx_tail(uart);
-    }
+    }// 环形缓冲
 
     size_t read_length = 0U;
     while ((s_dma_rx_head != dma_tail) && (read_length < length))

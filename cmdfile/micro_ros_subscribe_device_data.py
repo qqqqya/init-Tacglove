@@ -3,17 +3,17 @@
 
 from __future__ import annotations
 
-import argparse
+import argparse  # 解析工具参数
 import os
-import sys
-import time
+import sys       # 系统模块，用于获取环境变量
+import time      # 时间模块，用于等待2s
 from typing import Iterable
 
 os.environ.setdefault("ROS_DOMAIN_ID", "9")
 
 import rclpy
-from common_msgs.msg import KeyState, MCUStatus
-from common_msgs.srv import DeviceSynchronization
+from common_msgs.msg import KeyState, MCUStatus     # 引入TacGlove消息类型
+from common_msgs.srv import DeviceSynchronization   # 引入TacGlove服务类型，用于时间同步
 from rclpy.node import Node
 
 
@@ -50,7 +50,7 @@ class DeviceMonitor(Node):
     """自动发现设备并监听KeyState、MCUStatus消息。"""
 
     def __init__(self) -> None:
-        super().__init__("tacglove_pc_subscriber")
+        super().__init__("tacglove_pc_subscriber")  # 初始化节点  (ROS 2 Node: tacglove_pc_subscriber)   
         self.start_time = time.monotonic()
         self.selected_device = ""
         self.key_count = 0
@@ -64,10 +64,12 @@ class DeviceMonitor(Node):
 
         while rclpy.ok() and time.monotonic() < deadline:
             rclpy.spin_once(self, timeout_sec=0.1)
-            for topic_name, _ in self.get_topic_names_and_types():
+            # 遍历所有主题，检查是否是TacGlove设备
+            # 利用ros2的topic机制，发现所有发布者和订阅者，判断是否是TacGlove设备的topic
+            for topic_name, _ in self.get_topic_names_and_types():      # 这里 get_topic_names_and_types() 是ROS 2的图API
                 parts = topic_name.strip("/").split("/")
                 if (len(parts) >= 2 and
-                        parts[0].startswith(DEVICE_PREFIX) and
+                        parts[0].startswith(DEVICE_PREFIX) and  # "mcu_SN_") and 匹配设备前缀
                         parts[1] in DISCOVERY_TOPIC_SUFFIXES):
                     devices.add(parts[0])
             if devices:
@@ -113,7 +115,7 @@ class DeviceMonitor(Node):
             f"[{self._elapsed():8.3f}] [KEY #{self.key_count}] "
             f"{event_name} | ROS时间={stamp.sec}.{stamp.nanosec:09d}",
             flush=True,
-        )
+        )       #打印KeyState消息的事件类型和ROS时间
 
     def _on_mcu_status(self, message: MCUStatus) -> None:
         self.status_count += 1
@@ -129,7 +131,7 @@ class DeviceMonitor(Node):
             f"TX={message.message_tx_count} RX={message.message_rx_count} | "
             f"固件={message.firmware_version}",
             flush=True,
-        )
+        )       #打印MCUStatus消息的状态、Agent连接状态、运行时间、TX/RX计数和固件版本
 
     def _on_sync(
         self,
@@ -144,7 +146,7 @@ class DeviceMonitor(Node):
             f"[{self._elapsed():8.3f}] [SYNC #{self.sync_count}] "
             "已回复MCU时间同步请求",
             flush=True,
-        )
+        )       #打印同步请求的回复信息 mcu复位的时候会进行时间同步
         return response
 
 
@@ -193,36 +195,37 @@ def print_banner() -> None:
     print("=" * 64)
     print(f"ROS_DOMAIN_ID: {os.environ['ROS_DOMAIN_ID']}")
     print("监听内容: key_state、mcu_status")
-    print("提供服务: sync")
+    print("提供服务: sync")  # 再下面打印就是  发现设备等待2s
 
 
 def main() -> int:
     """程序入口。"""
-    arguments, ros_arguments = parse_arguments()
-    rclpy.init(args=ros_arguments)
-    node = DeviceMonitor()
+    arguments, ros_arguments = parse_arguments()    # 解析工具参数，设定等待2s等参数
+    rclpy.init(args=ros_arguments)                  # 初始化ROS 2 client 客户端
+    node = DeviceMonitor()                          # 创建设备节点 node
 
     try:
-        print_banner()
+        print_banner()          # 打印监听工具启动信息
         if arguments.device:
-            device_name = normalize_device_name(arguments.device)
+            device_name = normalize_device_name(arguments.device)   # 规范设备名  (mcu_SN_xxxxxx)
             print(f"指定设备: {device_name}")
         else:
             print(f"正在发现设备，等待 {arguments.discovery_seconds:.1f} 秒...")
-            devices = node.discover_devices(arguments.discovery_seconds)
+            devices = node.discover_devices(arguments.discovery_seconds)  # 利用topic机制发现设备
             if not devices:
                 print("未发现mcu_SN_*设备。请检查Agent、DOMAIN_ID和串口连接。")
                 return 1
-            device_name = choose_device(devices)
+            device_name = choose_device(devices)  # 从发现的设备中选择一个 
 
-        node.configure(device_name)
+        node.configure(device_name)  # 建立订阅和提供服务  create subscriber and service
+
         root = f"/{device_name}"
         print("\n已建立以下接口：")
         print(f"  SUB  {root}/key_state")
         print(f"  SUB  {root}/mcu_status")
         print(f"  SRV  {root}/sync")
         print("\n开始监听，按 Ctrl+C 退出。\n")
-        rclpy.spin(node)
+        rclpy.spin(node)                # 阻塞等待消息，触发回调        等待ROS 2事件循环，监听消息  
     except KeyboardInterrupt:
         print("\n已停止监听。")
     finally:

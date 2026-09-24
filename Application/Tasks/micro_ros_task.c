@@ -109,23 +109,23 @@ static task_status_t micro_ros_format_name(char *output,
 }
 
 /**
- * @brief 从Flash读取SN并生成本设备全部ROS节点、Topic和Service名称。
+ * @brief 从Flash读取SN（并统一标准化名称）并生成本设备全部ROS节点、Topic和Service名称。
  * @retval TASK_OK 名称已经生成。
  * @retval TASK_ERROR_RESOURCE 任一名称缓冲区容量不足。
  * @note SN无效时使用mcu_SN_UNPROGRAMMED，便于产测发现未写SN设备。
  */
 static task_status_t micro_ros_init_device_names(void){
     uint32_t index;
-    sn_driver_status_t sn_status =
+    sn_driver_status_t sn_status =      // 读Flash SN
         bsp_sn_driver_read(s_device_sn, sizeof(s_device_sn));
     if (SN_OK != sn_status){
         memcpy(s_device_sn,
                MICRO_ROS_FALLBACK_DEVICE_SN,
                sizeof(MICRO_ROS_FALLBACK_DEVICE_SN));
     }
-
+    // 命名设备ID 通过sn
     for (index = 0U;
-         (index < (sizeof(s_ros_device_id) - 1U)) &&
+         (index < (sizeof(s_ros_device_id) - 1U)) &&    //18个字符 
          ('\0' != s_device_sn[index]);
          ++index)
     {
@@ -139,11 +139,12 @@ static task_status_t micro_ros_init_device_names(void){
     }
     s_ros_device_id[index] = '\0';
 
+    //使用设备名和接口后缀生成完整ROS名称。
     if (TASK_OK != micro_ros_format_name(s_node_name,
                                          sizeof(s_node_name),
                                          MICRO_ROS_DEVICE_NAME_PREFIX,
                                          s_ros_device_id,
-                                         ""))
+                                         ""))                           //生成节点名称
     {
         return TASK_ERROR_RESOURCE;
     }
@@ -151,7 +152,7 @@ static task_status_t micro_ros_init_device_names(void){
                                          sizeof(s_key_topic),
                                          "/",
                                          s_node_name,
-                                         MICRO_ROS_KEY_TOPIC_SUFFIX))
+                                         MICRO_ROS_KEY_TOPIC_SUFFIX))   //生成按键topic
     {
         return TASK_ERROR_RESOURCE;
     }
@@ -159,7 +160,7 @@ static task_status_t micro_ros_init_device_names(void){
                                          sizeof(s_status_topic),
                                          "/",
                                          s_node_name,
-                                         MICRO_ROS_STATUS_TOPIC_SUFFIX))
+                                         MICRO_ROS_STATUS_TOPIC_SUFFIX))//生成mcu state topic
     {
         return TASK_ERROR_RESOURCE;
     }
@@ -167,7 +168,7 @@ static task_status_t micro_ros_init_device_names(void){
                                          sizeof(s_led_cmd_topic),
                                          "/",
                                          s_node_name,
-                                         MICRO_ROS_LED_CMD_TOPIC_SUFFIX))
+                                         MICRO_ROS_LED_CMD_TOPIC_SUFFIX))//生成led cmd topic
     {
         return TASK_ERROR_RESOURCE;
     }
@@ -175,7 +176,7 @@ static task_status_t micro_ros_init_device_names(void){
                                          sizeof(s_sync_service),
                                          "/",
                                          s_node_name,
-                                         MICRO_ROS_SYNC_SERVICE_SUFFIX))
+                                         MICRO_ROS_SYNC_SERVICE_SUFFIX))//生成sync service
     {
         return TASK_ERROR_RESOURCE;
     }
@@ -295,6 +296,7 @@ static void micro_ros_led_cmd_callback(const void *message){
 
     ++s_message_rx_count;   //回调的时候执行ledtask中的submit--写入任务邮箱
     (void)led_task_submit_cmd(led_cmd->led_mode, led_cmd->beep_mode);
+                    // ledmode 6个灯的模式      callback只负责提交数据 led_task负责执行
 }
 
 /** @brief 接收PC同步服务响应并建立ROS时间和FreeRTOS tick的换算基准。 */
@@ -600,7 +602,7 @@ void micro_ros_task_entry(void *argument){
         vTaskSuspend(NULL);
     }
 
-    if (TASK_OK != micro_ros_init_device_names())   // 初始化设备名称获取sn设备名称  为后续msg传递
+    if (TASK_OK != micro_ros_init_device_names())   // 初始化设备名称获取sn设备名称  生成node topic sync 为后续msg传递
     {
         vTaskSuspend(NULL);
     }
@@ -608,12 +610,12 @@ void micro_ros_task_entry(void *argument){
     micro_ros_init_messages();//ROS消息对象绑定到全部静态字符串缓冲区
     micro_ros_zero_entities();//初始化ROS实体
 
-    if (RMW_RET_OK != rmw_uros_set_custom_transport(//handheld代码里面这个是在 micro_ros_init 中包含着的
+    if (RMW_RET_OK != rmw_uros_set_custom_transport(// 注册自定义传输层 到client中
                           true,
                           &huart2,
                           cubemx_transport_open,
                           cubemx_transport_close,
-                          cubemx_transport_write,
+                          cubemx_transport_write,//handheld代码里面这个是在 micro_ros_init 中包含着的
                           cubemx_transport_read))
     {
         vTaskSuspend(NULL);

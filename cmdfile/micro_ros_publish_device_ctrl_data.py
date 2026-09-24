@@ -51,7 +51,7 @@ class DeviceController(Node):
     """自动发现设备并向指定设备发布LedCmd。"""
 
     def __init__(self) -> None:
-        super().__init__("tacglove_pc_publisher")
+        super().__init__("tacglove_pc_publisher")    # 初始化设备控制器节点
         self.selected_device = ""
         self.led_modes = [0] * LED_COUNT
         self.beep_mode = 0
@@ -64,7 +64,7 @@ class DeviceController(Node):
 
         while rclpy.ok() and time.monotonic() < deadline:
             rclpy.spin_once(self, timeout_sec=0.1)
-            for topic_name, _ in self.get_topic_names_and_types():
+            for topic_name, _ in self.get_topic_names_and_types():      # 这里 get_topic_names_and_types() 根据topic搜寻设备
                 parts = topic_name.strip("/").split("/")
                 if (len(parts) >= 2 and
                         parts[0].startswith(DEVICE_PREFIX) and
@@ -86,14 +86,14 @@ class DeviceController(Node):
 
     def publish_command(self) -> None:
         """发布当前缓存的全部LED和蜂鸣器状态。"""
-        message = LedCmd()
+        message = LedCmd()                              # 创建LED命令消息  common_msgs.msg
         message.header.stamp = self.get_clock().now().to_msg()
         message.header.frame_id = "pc_led_cmd"
         message.led_mode = list(self.led_modes)
-        message.beep_mode = self.beep_mode
-        self.publisher.publish(message)
+        message.beep_mode = self.beep_mode          # 0~3
+        self.publisher.publish(message)             # → DDS → Agent → 串口 → MCU
         self.publish_count += 1
-
+        
         rclpy.spin_once(self, timeout_sec=0.05)
         print(
             f"\n已发送 #{self.publish_count}: "
@@ -218,25 +218,25 @@ def main() -> int:
     """程序入口。"""
     arguments, ros_arguments = parse_arguments()
     rclpy.init(args=ros_arguments)
-    node = DeviceController()
+    node = DeviceController()                   # 创建设备控制器publishi node 节点
 
     try:
         print_banner()
         if arguments.device:
-            device_name = normalize_device_name(arguments.device)
+            device_name = normalize_device_name(arguments.device)    # 归一化设备名
             print(f"指定设备: {device_name}")
         else:
             print(f"正在发现设备，等待 {arguments.discovery_seconds:.1f} 秒...")
-            devices = node.discover_devices(arguments.discovery_seconds)
+            devices = node.discover_devices(arguments.discovery_seconds)    # 通过topic 发现设备
             if not devices:
                 print("未发现mcu_SN_*设备。请检查Agent、DOMAIN_ID和串口连接。")
                 return 1
-            device_name = choose_device(devices)
+            device_name = choose_device(devices)     # 选择设备
 
-        node.configure(device_name)
+        node.configure(device_name)                 # 配置pub
         print(f"控制Topic: /{device_name}/led_cmd")
-        print_mode_table()
-        run_menu(node)
+        print_mode_table()                      # 循环打印支持的模式
+        run_menu(node)      
     except (EOFError, KeyboardInterrupt):
         print("\n已退出控制工具。")
     finally:

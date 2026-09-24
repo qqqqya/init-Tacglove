@@ -359,12 +359,10 @@ task_status_t led_task_submit_cmd(//提交一帧由PC下发的六灯和蜂鸣器
     {
         return TASK_ERROR_PARAMETER;
     }
-
     if (NULL == s_led_cmd_queue)
     {
         return TASK_ERROR_RESOURCE;
     }
-
     if (LED_TASK_BEEPING < beep_mode)
     {
         return TASK_ERROR_PARAMETER;
@@ -378,11 +376,11 @@ task_status_t led_task_submit_cmd(//提交一帧由PC下发的六灯和蜂鸣器
             return TASK_ERROR_PARAMETER;
         }
 
-        cmd.led_mode[index] = led_mode[index];
+        cmd.led_mode[index] = led_mode[index];// 6个灯的模式
     }
-    cmd.beep_mode = beep_mode;
+    cmd.beep_mode = beep_mode;      // 蜂鸣器模式
 
-    if (pdPASS != xQueueOverwrite(s_led_cmd_queue, &cmd))
+    if (pdPASS != xQueueOverwrite(s_led_cmd_queue, &cmd))   // 将邮箱中的数据覆盖为cmd
     {
         return TASK_ERROR;
     }
@@ -464,7 +462,7 @@ void led_task_entry(void *argument){
     for (;;)
     {
         led_task_cmd_t received_cmd = {0};
-        if (pdPASS == xQueueReceive(s_led_cmd_queue, &received_cmd, 0U))
+        if (pdPASS == xQueueReceive(s_led_cmd_queue, &received_cmd, 0U))    // 从邮箱中接收数据 overwrite的数据
         { //邮箱中存的led cmd 有数据
             remote_active = received_cmd.enabled;
             if (remote_active)

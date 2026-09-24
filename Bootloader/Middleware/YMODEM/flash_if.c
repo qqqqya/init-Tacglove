@@ -33,12 +33,12 @@ FLASHIF_StatusTypeDef FLASH_If_Check(uint32_t app_address){
 
     if ((stack_pointer < SRAM_START_ADDRESS) ||
         (stack_pointer > SRAM_END_ADDRESS) ||
-        ((stack_pointer & 0x7UL) != 0UL))
+        ((stack_pointer & 0x7UL) != 0UL))                   //栈顶指针（SP）最低 3 位必须为 0（8字节对齐）
     {
         return FLASHIF_EMPTY;
     }
 
-    if (((reset_handler & 1UL) == 0UL) ||
+    if (((reset_handler & 1UL) == 0UL) ||                   //复位入口地址  最低 1 位必须为 1
         (reset_address < APP1_START_ADDR) ||
         (reset_address >= (APP1_START_ADDR + APP1_SIZE)))
     {

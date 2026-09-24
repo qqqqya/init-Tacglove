@@ -44,11 +44,11 @@ static void Boot_StartApplication(uint32_t app_stack_pointer,
 static void CheckAppPartition(void){
     if (FLASHIF_OK == FLASH_If_Check(APP1_START_ADDR))
     {
-        Serial_PutStatus(BOOT_DNL_IMG_VALID);
+        Serial_PutStatus(BOOT_DNL_IMG_VALID);   //APP1分区有效
     }
     else
     {
-        Serial_PutStatus(BOOT_DNL_IMG_INVALID);
+        Serial_PutStatus(BOOT_DNL_IMG_INVALID); //APP1分区无效
     }
 }
 
@@ -60,14 +60,14 @@ void Boot_JumpToApp(void){
     uint32_t app_reset_address;
     uint32_t index;
 
-    if (FLASHIF_OK != CheckAppSilent(APP1_START_ADDR))
+    if (FLASHIF_OK != CheckAppSilent(APP1_START_ADDR))              //校验APP1分区有效性  但是他这里好像没有像之前一样  他是通过后3/1位进行检查的
     {
         Serial_PutStatus(BOOT_DNL_IMG_INVALID);
         return;
     }
 
     app_stack_pointer = *(const volatile uint32_t *)APP1_START_ADDR;
-    app_reset_address = *(const volatile uint32_t *)(APP1_START_ADDR + 4U);
+    app_reset_address = *(const volatile uint32_t *)(APP1_START_ADDR + 4U);     //reset_handler APP复位入口地址
 
     Serial_PutStatus(BOOT_SYS_JUMP_APP);
     (void)HAL_UART_DeInit(&IAP_UART_HANDLE);
@@ -77,7 +77,7 @@ void Boot_JumpToApp(void){
     __disable_irq();
     SysTick->CTRL = 0U;
     SysTick->LOAD = 0U;
-    SysTick->VAL = 0U;
+    SysTick->VAL = 0U;      //关中断 关定时器
 
     for (index = 0U; index < 8U; ++index)
     {
@@ -86,13 +86,14 @@ void Boot_JumpToApp(void){
     }
     SCB->ICSR = SCB_ICSR_PENDSVCLR_Msk | SCB_ICSR_PENDSTCLR_Msk;
 
-    SCB->VTOR = APP1_START_ADDR;
+    SCB->VTOR = APP1_START_ADDR;            //设置APP1向量表地址
     __set_BASEPRI(0U);
     __set_FAULTMASK(0U);
     __set_CONTROL(0U);
     __DSB();
     __ISB();
-    Boot_StartApplication(app_stack_pointer, app_reset_address);
+
+    Boot_StartApplication(app_stack_pointer, app_reset_address);   /*不太懂这里整了半天好像没有跳转一样*/  //跳转APP复位入口
 }
 
 /**
@@ -144,7 +145,7 @@ static void HandlePrefixedCommand(uint8_t prefix){
 void Main_Menu(void){
     uint32_t last_wait_status_tick = 0U;
 
-    Serial_PutStatus(BOOT_MENU_ENTERED);
+    Serial_PutStatus(BOOT_MENU_ENTERED);// 进入Bootloader菜单
 
     while (1)
     {
@@ -155,13 +156,13 @@ void Main_Menu(void){
         if ((last_wait_status_tick == 0U) ||
             ((now - last_wait_status_tick) >= WAIT_STATUS_PERIOD_MS))
         {
-            Serial_PutStatus(BOOT_WAIT_USER_CMD);
+            Serial_PutStatus(BOOT_WAIT_USER_CMD);  //等待用户输入
             last_wait_status_tick = now;
         }
 
         //接受用户输入 py转端口命令到c端
         receive_status = HAL_UART_Receive(&IAP_UART_HANDLE,
-                                          &key,
+                                          &key, // 接收用户输入
                                           1U,
                                           MENU_RX_TIMEOUT_MS);
         if (HAL_TIMEOUT == receive_status)
@@ -191,7 +192,7 @@ void Main_Menu(void){
 
             case (uint8_t)'2':
                 /* 小阶段5.2只保留协议入口，不擦除、不接收固件。 */
-                Serial_PutStatus(BOOT_USER_CMD_ERR);
+                Serial_PutStatus(BOOT_USER_CMD_ERR);  //预留YMODEM 进行升级
                 break;
 
             case (uint8_t)'3':
@@ -199,7 +200,7 @@ void Main_Menu(void){
                 break;
 
             default:
-                Serial_PutStatus(BOOT_USER_CMD_ERR);
+                Serial_PutStatus(BOOT_USER_CMD_ERR);  //未知命令
                 break;
         }
     }
