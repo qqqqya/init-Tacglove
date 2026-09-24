@@ -201,7 +201,7 @@ def print_banner() -> None:
 def main() -> int:
     """程序入口。"""
     arguments, ros_arguments = parse_arguments()    # 解析工具参数，设定等待2s等参数
-    rclpy.init(args=ros_arguments)                  # 初始化ROS 2 client 客户端
+    rclpy.init(args=ros_arguments)                  # 初始化ROS 2 py 客户端
     node = DeviceMonitor()                          # 创建设备节点 node
 
     try:

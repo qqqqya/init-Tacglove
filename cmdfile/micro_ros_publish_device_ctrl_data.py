@@ -53,9 +53,9 @@ class DeviceController(Node):
     def __init__(self) -> None:
         super().__init__("tacglove_pc_publisher")    # 初始化设备控制器节点
         self.selected_device = ""
-        self.led_modes = [0] * LED_COUNT
-        self.beep_mode = 0
-        self.publish_count = 0
+        self.led_modes = [0] * LED_COUNT        # 初始化LED模式为关闭  全部设置为0
+        self.beep_mode = 0                      # 初始化蜂鸣器模式为关闭 设置为0~3 
+        self.publish_count = 0                  # 初始化发布计数为0
 
     def discover_devices(self, timeout_seconds: float) -> list[str]:
         """在指定时间内收集发布了TacGlove接口的设备名。"""
@@ -79,22 +79,22 @@ class DeviceController(Node):
         """为选定设备创建LED命令Publisher。"""
         self.selected_device = device_name
         self.publisher = self.create_publisher(
-            LedCmd,
+            LedCmd,                         # from common_msgs.msg
             f"/{device_name}/led_cmd",
             10,
         )
 
     def publish_command(self) -> None:
         """发布当前缓存的全部LED和蜂鸣器状态。"""
-        message = LedCmd()                              # 创建LED命令消息  common_msgs.msg
-        message.header.stamp = self.get_clock().now().to_msg()
+        message = LedCmd()                                      # 创建LED命令消息 消息对象  common_msgs.msg
+        message.header.stamp = self.get_clock().now().to_msg()  # 设置消息戳为当前时间
         message.header.frame_id = "pc_led_cmd"
-        message.led_mode = list(self.led_modes)
+        message.led_mode = list(self.led_modes)     # 菜单里按键选好的模式拷贝进消息体 list(...) 是复制一份
         message.beep_mode = self.beep_mode          # 0~3
-        self.publisher.publish(message)             # → DDS → Agent → 串口 → MCU
-        self.publish_count += 1
+        self.publisher.publish(message)             # → DDS → Agent → 串口 → MCU   # ← 真正的发送在这里
+        self.publish_count += 1                     # 发布计数加1 ros没有确认收到 ---这里难道是为了看丢包之类的？？
         
-        rclpy.spin_once(self, timeout_sec=0.05)
+        rclpy.spin_once(self, timeout_sec=0.05)     # 阻塞 50ms 再往下走，发送节流
         print(
             f"\n已发送 #{self.publish_count}: "
             f"LED={self.led_modes}, BEEP={self.beep_mode}"
@@ -140,52 +140,111 @@ def print_mode_table() -> None:
         print(f"  {value}: {name}")
 
 
+# ===========================================================================
+# [旧版菜单] 二级菜单交互，已注释替换为单键直控模式
+# ===========================================================================
+# def print_menu(controller: DeviceController) -> None:
+#     """打印主操作菜单和当前命令缓存。"""
+#     print("\n" + "=" * 64)
+#     print(f" 当前设备: {controller.selected_device}")
+#     print(f" 目标Topic: /{controller.selected_device}/led_cmd")
+#     print(f" 当前LED: {controller.led_modes}")
+#     print(f" 当前蜂鸣器: {controller.beep_mode}")
+#     print("-" * 64)
+#     print("1. 设置单颗LED（序号1~6对应物理LED2~LED7）")
+#     print("2. 设置全部LED")
+#     print("3. 设置蜂鸣器")
+#     print("4. 显示模式说明")
+#     print("5. 重发当前命令")
+#     print("0. 退出")
+#     print("=" * 64)
+# ===========================================================================
+
+
 def print_menu(controller: DeviceController) -> None:
-    """打印主操作菜单和当前命令缓存。"""
+    """打印直控菜单，单键下发全部LED或蜂鸣器命令。"""
+    led_display = ", ".join(
+        f"LED{i+1}={LED_MODE_NAMES.get(controller.led_modes[i], '?')}"
+        for i in range(LED_COUNT)
+    )
     print("\n" + "=" * 64)
     print(f" 当前设备: {controller.selected_device}")
     print(f" 目标Topic: /{controller.selected_device}/led_cmd")
-    print(f" 当前LED: {controller.led_modes}")
-    print(f" 当前蜂鸣器: {controller.beep_mode}")
+    print(f" 当前LED状态: {led_display}")
+    print(f" 当前蜂鸣器: {BEEP_MODE_NAMES.get(controller.beep_mode, '?')}")
     print("-" * 64)
-    print("1. 设置单颗LED（序号1~6对应物理LED2~LED7）")
-    print("2. 设置全部LED")
-    print("3. 设置蜂鸣器")
-    print("4. 显示模式说明")
-    print("5. 重发当前命令")
-    print("0. 退出")
+    print(" [全部LED - 单键直控]")
+    print("   0: 关闭         1: 绿色常亮      2: 绿色闪烁")
+    print("   3: 红色常亮      4: 蓝色闪烁      5: 蓝色常亮")
+    print("-" * 64)
+    print(" [蜂鸣器 - 单键直控]")
+    print("   6: 关闭         7: 短鸣          8: 长鸣          9: 连续鸣叫")
+    print("-" * 64)
+    print("   q: 退出")
     print("=" * 64)
 
 
+# ===========================================================================
+# [旧版菜单交互] 二级菜单逐项选择，已注释替换为单键直控模式
+# ===========================================================================
+# def run_menu(controller: DeviceController) -> None:
+#     """循环处理用户命令，并在状态变更后发送完整LedCmd。"""
+#     while rclpy.ok():
+#         print_menu(controller)
+#         selection = input("请选择：").strip()
+#
+#         if selection == "0":
+#             return
+#         if selection == "1":
+#             led_number = read_number("LED序号(1~6)：", 1, LED_COUNT)
+#             print_mode_table()
+#             mode = read_number("LED模式(0~5)：", 0, 5)
+#             controller.led_modes[led_number - 1] = mode
+#             controller.publish_command()
+#         elif selection == "2":
+#             print_mode_table()
+#             mode = read_number("全部LED模式(0~5)：", 0, 5)
+#             controller.led_modes = [mode] * LED_COUNT
+#             controller.publish_command()
+#         elif selection == "3":
+#             print_mode_table()
+#             controller.beep_mode = read_number("蜂鸣器模式(0~3)：", 0, 3)
+#             controller.publish_command()
+#         elif selection == "4":
+#             print_mode_table()
+#         elif selection == "5":
+#             controller.publish_command()
+#         else:
+#             print("输入无效，请重新选择。")
+# ===========================================================================
+
+
 def run_menu(controller: DeviceController) -> None:
-    """循环处理用户命令，并在状态变更后发送完整LedCmd。"""
+    """单键直控：0~5全部LED模式，6~9蜂鸣器模式，q退出。"""
     while rclpy.ok():
         print_menu(controller)
-        selection = input("请选择：").strip()
+        selection = input("请按键(0~9/q)：").strip().lower()
 
-        if selection == "0":
+        if selection == "q":
             return
-        if selection == "1":
-            led_number = read_number("LED序号(1~6)：", 1, LED_COUNT)
-            print_mode_table()
-            mode = read_number("LED模式(0~5)：", 0, 5)
-            controller.led_modes[led_number - 1] = mode
-            controller.publish_command()
-        elif selection == "2":
-            print_mode_table()
-            mode = read_number("全部LED模式(0~5)：", 0, 5)
-            controller.led_modes = [mode] * LED_COUNT
-            controller.publish_command()
-        elif selection == "3":
-            print_mode_table()
-            controller.beep_mode = read_number("蜂鸣器模式(0~3)：", 0, 3)
-            controller.publish_command()
-        elif selection == "4":
-            print_mode_table()
-        elif selection == "5":
-            controller.publish_command()
+
+        if selection.isdigit():
+            key = int(selection)
+            if 0 <= key <= 5:
+                mode_name = LED_MODE_NAMES[key]              # 获取LED模式名称 0~5 亮灭 GRB
+                controller.led_modes = [key] * LED_COUNT     # 全部LED设为相同模式 0~5 * 6
+                print(f"→ 全部LED设为: {mode_name}")
+                controller.publish_command()
+            elif 6 <= key <= 9:
+                beep_key = key - 6
+                beep_name = BEEP_MODE_NAMES[beep_key]
+                controller.beep_mode = beep_key
+                print(f"→ 蜂鸣器设为: {beep_name}")
+                controller.publish_command()
+            else:
+                print("输入无效，请输入 0~9 或 q 退出。")
         else:
-            print("输入无效，请重新选择。")
+            print("输入无效，请输入 0~9 或 q 退出。")
 
 
 def parse_arguments() -> tuple[argparse.Namespace, list[str]]:
@@ -217,7 +276,7 @@ def print_banner() -> None:
 def main() -> int:
     """程序入口。"""
     arguments, ros_arguments = parse_arguments()
-    rclpy.init(args=ros_arguments)
+    rclpy.init(args=ros_arguments)              # 初始化ROS 2 py 客户端
     node = DeviceController()                   # 创建设备控制器publishi node 节点
 
     try:
